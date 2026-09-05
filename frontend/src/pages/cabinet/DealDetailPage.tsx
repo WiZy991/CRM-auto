@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { carsApi, dealsApi, errorMessage, getSession, uploadsApi } from '@/lib/api';
-import type { Stage } from '@/lib/api';
+import type { Deal, Stage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
 import {
@@ -17,6 +17,7 @@ import {
   StageBar,
   TextAreaField,
   TextField,
+  cn,
   useToast,
 } from '@/ui';
 
@@ -33,6 +34,8 @@ const DOCUMENT_KINDS = [
 
 const PRINTABLE_KINDS = DOCUMENT_KINDS.filter((item) => item.value !== 'other');
 
+type DealTab = 'stage' | 'docs' | 'chat' | 'more';
+
 function dateInput(value?: string): string {
   return value ? value.slice(0, 10) : '';
 }
@@ -41,10 +44,20 @@ function timelineItem(label: string, value?: string) {
   return { label, value: value ? formatDateTime(value) : '—' };
 }
 
+function stageFacts(deal: Deal): string {
+  const bits: string[] = [];
+  if (deal.amount_label) bits.push(deal.amount_label);
+  if (deal.paid_share > 0) bits.push(`оплачено ${Math.round(deal.paid_share * 100)}%`);
+  if (deal.destination_port) bits.push(deal.destination_port);
+  if (deal.sbkts_number) bits.push(`СБКТС ${deal.sbkts_number}`);
+  return bits.join(' · ');
+}
+
 export function DealDetailPage() {
   const { id = '' } = useParams();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<DealTab>('stage');
   const [message, setMessage] = useState('');
   const [stage, setStage] = useState('');
   const [comment, setComment] = useState('');
@@ -259,7 +272,17 @@ export function DealDetailPage() {
     );
   }
 
-  const { deal, history, tasks, documents, next_stages, can_manage, can_review, review: existingReview } = details.data;
+  const { deal, history, tasks, documents, next_stages, can_manage, can_review, review: existingReview } =
+    details.data;
+  const visibleDocs = documents.filter((doc) => can_manage || doc.visible_to_client);
+  const facts = stageFacts(deal);
+
+  const tabs: { id: DealTab; label: string }[] = [
+    { id: 'stage', label: 'Этап' },
+    { id: 'docs', label: 'Документы' },
+    { id: 'chat', label: 'Переписка' },
+    { id: 'more', label: 'Ещё' },
+  ];
 
   function onSend(event: FormEvent) {
     event.preventDefault();
@@ -284,56 +307,65 @@ export function DealDetailPage() {
     }
   }
 
+  const lotOptions = [
+    { value: '', title: 'Без привязки' },
+    ...(myCars.data?.items ?? []).map((car) => ({
+      value: car.id,
+      title: car.title || `${car.brand ?? ''} ${car.model ?? ''}`.trim() || car.id,
+    })),
+  ];
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <PageHeader
         kicker={`Сделка № ${deal.number}`}
         title={deal.title}
-        description={`${deal.stage_title}${deal.amount_label ? ` · ${deal.amount_label}` : ''}. Ниже — этапы, документы, переписка и задачи.`}
-        actions={deal.is_stale ? <Badge tone="amber">Зависла</Badge> : null}
+        description={`${deal.stage_title}${deal.amount_label ? ` · ${deal.amount_label}` : ''}`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {deal.is_stale ? <Badge tone="amber">Зависла</Badge> : null}
+            <LinkButton to="/app" size="sm">
+              К воронке
+            </LinkButton>
+          </div>
+        }
       />
 
       {stages.data && (
-        <StageBar stages={stages.data.items} current={deal.stage} stale={deal.is_stale} />
-      )}
-
-      <section className="panel space-y-3 p-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-            Статус для клиента
-          </p>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            {deal.client_hint ||
-              stages.data?.items.find((item) => item.stage === deal.stage)?.client_hint ||
-              deal.stage_title}
-          </p>
+        <div className="panel space-y-2 p-3 sm:p-4">
+          <StageBar stages={stages.data.items} current={deal.stage} stale={deal.is_stale} />
           {deal.normative_days != null && (
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Ориентир этапа: {deal.normative_days} дн. · на этапе уже {deal.days_on_stage} дн.
+            <p className="text-xs text-[var(--text-muted)]">
+              На этапе {deal.days_on_stage} из {deal.normative_days} дн. (ориентир)
             </p>
           )}
+          <details className="text-sm">
+            <summary className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+              Даты этапов
+            </summary>
+            <ol className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                timelineItem('Первый контакт', deal.first_contacted_at),
+                timelineItem('Договор', deal.contract_signed_at),
+                timelineItem('Оплата', deal.paid_at),
+                timelineItem('Отгрузка', deal.shipped_at),
+                timelineItem('Прибытие в порт', deal.arrived_at),
+                timelineItem('Растаможка', deal.customs_cleared_at),
+                timelineItem('Выдача', deal.handed_over_at),
+              ].map((item) => (
+                <li key={item.label} className="rounded-md bg-[var(--surface-muted)] px-3 py-2">
+                  <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
+                  <p className="mt-0.5 font-medium">{item.value}</p>
+                </li>
+              ))}
+            </ol>
+          </details>
         </div>
-        <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            timelineItem('Первый контакт', deal.first_contacted_at),
-            timelineItem('Договор', deal.contract_signed_at),
-            timelineItem('Оплата', deal.paid_at),
-            timelineItem('Отгрузка', deal.shipped_at),
-            timelineItem('Прибытие в порт', deal.arrived_at),
-            timelineItem('Растаможка', deal.customs_cleared_at),
-            timelineItem('Выдача', deal.handed_over_at),
-          ].map((item) => (
-            <li key={item.label} className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm">
-              <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
-              <p className="mt-0.5 font-medium">{item.value}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      )}
 
       {can_manage && next_stages.length > 0 && (
-        <section className="panel flex flex-wrap items-end gap-3 p-4">
-          <div className="w-full sm:w-56">
+        <section className="panel flex flex-wrap items-end gap-3 p-3 sm:p-4">
+          <div className="w-full sm:w-48">
             <SelectField
               label="Следующий этап"
               value={stage}
@@ -342,7 +374,7 @@ export function DealDetailPage() {
               options={next_stages}
             />
           </div>
-          <div className="min-w-0 flex-1 sm:min-w-56">
+          <div className="min-w-0 flex-1 sm:min-w-40">
             <TextField
               label="Комментарий"
               value={comment}
@@ -359,182 +391,315 @@ export function DealDetailPage() {
             Перевести
           </Button>
           <p className="w-full text-xs text-[var(--text-muted)]">
-            К оплате нужна сумма договора. К привозу — оплата или платёжка. К выдаче — СБКТС или
-            таможенная декларация.
+            К оплате — сумма. К привозу — оплата или платёжка. К выдаче — СБКТС или декларация.
           </p>
         </section>
       )}
 
-      {can_manage && (
-        <section className="panel grid gap-3 p-4 sm:grid-cols-2">
-          {(deal.stage === 'lead' || !deal.first_contacted_at) && (
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={markContacted}
-                onChange={(event) => setMarkContacted(event.target.checked)}
-              />
-              Первый контакт с клиентом состоялся
-            </label>
-          )}
-
-          <div className="sm:col-span-2">
-            <SelectField
-              label="Лот из каталога"
-              value={carId}
-              onChange={(event) => setCarId(event.target.value)}
-              placeholder="Без привязки"
-              options={[
-                { value: '', title: 'Без привязки' },
-                ...(myCars.data?.items ?? []).map((car) => ({
-                  value: car.id,
-                  title: car.title || `${car.brand ?? ''} ${car.model ?? ''}`.trim() || car.id,
-                })),
-              ]}
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <TextAreaField
-              label="Состав услуг по договору"
-              rows={3}
-              value={servicesNote}
-              onChange={(event) => setServicesNote(event.target.value)}
-            />
-          </div>
-
-          <TextField
-            label="Сумма договора, ₽"
-            inputMode="decimal"
-            value={amountRub}
-            onChange={(event) => setAmountRub(event.target.value)}
-          />
-          <TextField
-            label="Оплачено, ₽"
-            inputMode="decimal"
-            value={paidRub}
-            onChange={(event) => setPaidRub(event.target.value)}
-          />
-          <TextField
-            label="Порт назначения"
-            value={destinationPort}
-            onChange={(event) => setDestinationPort(event.target.value)}
-          />
-          <TextField
-            label="Трекинг / путь"
-            value={shippingTracking}
-            onChange={(event) => setShippingTracking(event.target.value)}
-          />
-          <TextField
-            label="Прибытие в порт"
-            type="date"
-            value={arrivedAt}
-            onChange={(event) => setArrivedAt(event.target.value)}
-          />
-          <TextField
-            label="Пошлины и сборы, ₽"
-            inputMode="decimal"
-            value={customsDuties}
-            onChange={(event) => setCustomsDuties(event.target.value)}
-          />
-          <TextField
-            label="Номер СБКТС"
-            value={sbktsNumber}
-            onChange={(event) => setSbktsNumber(event.target.value)}
-          />
-          <TextField
-            label="Дата СБКТС"
-            type="date"
-            value={sbktsIssuedAt}
-            onChange={(event) => setSbktsIssuedAt(event.target.value)}
-          />
-          <TextField
-            label="План выдачи"
-            type="date"
-            value={handover}
-            onChange={(event) => setHandover(event.target.value)}
-          />
-
-          <div className="sm:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-[var(--text-muted)]">
-              {deal.paid_share > 0
-                ? `Оплачено ${Math.round(deal.paid_share * 100)}%`
-                : 'На этапе «Оплата» зафиксируйте сумму и платёжку в документах.'}
-            </p>
-            <Button
-              size="sm"
-              className="w-full sm:w-auto"
-              loading={saveFinance.isPending}
-              onClick={() => saveFinance.mutate()}
-            >
-              Сохранить данные этапа
-            </Button>
-          </div>
-        </section>
-      )}
-
-      {!can_manage && (
-        <section className="panel grid gap-2 p-4 text-sm sm:grid-cols-2">
-          {deal.destination_port && (
-            <p>
-              <span className="text-[var(--text-muted)]">Порт: </span>
-              {deal.destination_port}
-            </p>
-          )}
-          {deal.shipping_tracking && (
-            <p className="sm:col-span-2">
-              <span className="text-[var(--text-muted)]">Путь: </span>
-              {deal.shipping_tracking}
-            </p>
-          )}
-          {deal.sbkts_number && (
-            <p>
-              <span className="text-[var(--text-muted)]">СБКТС: </span>
-              {deal.sbkts_number}
-            </p>
-          )}
-          {deal.services_note && (
-            <p className="sm:col-span-2">
-              <span className="text-[var(--text-muted)]">Услуги: </span>
-              {deal.services_note}
-            </p>
-          )}
-        </section>
-      )}
-
-      {can_manage && deal.outcome === 'open' && (
-        <section className="panel flex flex-wrap items-end gap-3 p-4">
-          <div className="min-w-0 flex-1 sm:min-w-56">
-            <TextField
-              label="Причина отказа"
-              value={lostReason}
-              onChange={(event) => setLostReason(event.target.value)}
-            />
-          </div>
-          <Button
-            className="w-full sm:w-auto"
-            loading={closeDeal.isPending}
-            onClick={() => closeDeal.mutate({ outcome: 'lost', reason: lostReason })}
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={cn(
+              'shrink-0 rounded-[var(--radius-sheet)] px-3 py-2 text-sm font-medium',
+              tab === item.id
+                ? 'bg-[var(--accent)] text-[var(--accent-contrast,white)]'
+                : 'bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+            )}
           >
-            Закрыть как отказ
-          </Button>
-          {deal.stage === 'handover' && (
-            <Button
-              variant="primary"
-              className="w-full sm:w-auto"
-              loading={closeDeal.isPending}
-              onClick={() => closeDeal.mutate({ outcome: 'won', reason: '' })}
-            >
-              Выдана, закрыть
-            </Button>
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'stage' && (
+        <section className="panel space-y-4 p-3 sm:p-4">
+          {facts && (
+            <p className="text-sm text-[var(--text-muted)]">
+              <span className="text-[var(--text-secondary)]">Сейчас: </span>
+              {facts}
+            </p>
+          )}
+
+          {can_manage ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(deal.stage === 'lead' || !deal.first_contacted_at) && (
+                <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={markContacted}
+                    onChange={(event) => setMarkContacted(event.target.checked)}
+                  />
+                  Первый контакт с клиентом состоялся
+                </label>
+              )}
+
+              {(deal.stage === 'needs' || deal.stage === 'lead') && (
+                <div className="sm:col-span-2">
+                  <SelectField
+                    label="Лот из каталога"
+                    value={carId}
+                    onChange={(event) => setCarId(event.target.value)}
+                    placeholder="Без привязки"
+                    options={lotOptions}
+                  />
+                </div>
+              )}
+
+              {(deal.stage === 'contract' || deal.stage === 'payment') && (
+                <>
+                  {deal.stage === 'contract' && (
+                    <div className="sm:col-span-2">
+                      <TextAreaField
+                        label="Состав услуг по договору"
+                        rows={3}
+                        value={servicesNote}
+                        onChange={(event) => setServicesNote(event.target.value)}
+                      />
+                    </div>
+                  )}
+                  <TextField
+                    label="Сумма договора, ₽"
+                    inputMode="decimal"
+                    value={amountRub}
+                    onChange={(event) => setAmountRub(event.target.value)}
+                  />
+                  {deal.stage === 'payment' && (
+                    <>
+                      <TextField
+                        label="Оплачено, ₽"
+                        inputMode="decimal"
+                        value={paidRub}
+                        onChange={(event) => setPaidRub(event.target.value)}
+                      />
+                      <p className="text-xs text-[var(--text-muted)] sm:col-span-2">
+                        Платёжку приложите во вкладке «Документы».
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
+
+              {deal.stage === 'shipping' && (
+                <>
+                  <TextField
+                    label="Порт назначения"
+                    value={destinationPort}
+                    onChange={(event) => setDestinationPort(event.target.value)}
+                  />
+                  <TextField
+                    label="Трекинг / путь"
+                    value={shippingTracking}
+                    onChange={(event) => setShippingTracking(event.target.value)}
+                  />
+                  <TextField
+                    label="Прибытие в порт"
+                    type="date"
+                    value={arrivedAt}
+                    onChange={(event) => setArrivedAt(event.target.value)}
+                  />
+                </>
+              )}
+
+              {deal.stage === 'customs' && (
+                <>
+                  <TextField
+                    label="Пошлины и сборы, ₽"
+                    inputMode="decimal"
+                    value={customsDuties}
+                    onChange={(event) => setCustomsDuties(event.target.value)}
+                  />
+                  <TextField
+                    label="Номер СБКТС"
+                    value={sbktsNumber}
+                    onChange={(event) => setSbktsNumber(event.target.value)}
+                  />
+                  <TextField
+                    label="Дата СБКТС"
+                    type="date"
+                    value={sbktsIssuedAt}
+                    onChange={(event) => setSbktsIssuedAt(event.target.value)}
+                  />
+                  <p className="text-xs text-[var(--text-muted)] sm:col-span-2">
+                    Декларацию загрузите во вкладке «Документы».
+                  </p>
+                </>
+              )}
+
+              {deal.stage === 'handover' && (
+                <TextField
+                  label="План выдачи"
+                  type="date"
+                  value={handover}
+                  onChange={(event) => setHandover(event.target.value)}
+                />
+              )}
+
+              <div className="flex justify-end sm:col-span-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={saveFinance.isPending}
+                  onClick={() => saveFinance.mutate()}
+                >
+                  Сохранить
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-2 text-sm sm:grid-cols-2">
+              {deal.services_note && (
+                <p className="sm:col-span-2">
+                  <span className="text-[var(--text-muted)]">Услуги: </span>
+                  {deal.services_note}
+                </p>
+              )}
+              {deal.destination_port && (
+                <p>
+                  <span className="text-[var(--text-muted)]">Порт: </span>
+                  {deal.destination_port}
+                </p>
+              )}
+              {deal.shipping_tracking && (
+                <p className="sm:col-span-2">
+                  <span className="text-[var(--text-muted)]">Путь: </span>
+                  {deal.shipping_tracking}
+                </p>
+              )}
+              {deal.sbkts_number && (
+                <p>
+                  <span className="text-[var(--text-muted)]">СБКТС: </span>
+                  {deal.sbkts_number}
+                </p>
+              )}
+              {!facts && !deal.services_note && (
+                <p className="text-[var(--text-muted)] sm:col-span-2">Данных этапа пока нет.</p>
+              )}
+            </div>
           )}
         </section>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
-        <section>
-          <h2 className="mb-3 text-sm font-medium">Переписка</h2>
-          <ul className="panel max-h-[28rem] space-y-3 overflow-y-auto p-4">
+      {tab === 'docs' && (
+        <section className="panel space-y-4 p-3 sm:p-4">
+          <ul className="space-y-2 text-sm">
+            {visibleDocs.map((doc) => (
+              <li key={doc.id} className="flex flex-wrap items-baseline gap-2">
+                <button
+                  type="button"
+                  className="text-[var(--link)] underline underline-offset-4"
+                  onClick={() => void openAuthed(doc.url)}
+                >
+                  {doc.title}
+                </button>
+                <span className="text-xs text-[var(--text-muted)]">{doc.size_label}</span>
+              </li>
+            ))}
+            {visibleDocs.length === 0 && (
+              <li className="text-[var(--text-muted)]">Документов пока нет</li>
+            )}
+          </ul>
+
+          {can_manage && (
+            <div className="space-y-3 border-t border-[var(--border-hairline)] pt-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={docVisible}
+                  onChange={(event) => setDocVisible(event.target.checked)}
+                />
+                Показать клиенту
+              </label>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={generateDocs.isPending && !generateDocs.variables?.kind}
+                onClick={() => generateDocs.mutate({})}
+              >
+                Сформировать пакет
+              </Button>
+
+              <details className="text-sm">
+                <summary className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  Отдельные формы
+                </summary>
+                <ul className="mt-2 flex flex-col gap-2">
+                  {PRINTABLE_KINDS.map((kind) => {
+                    const exists = documents.some((doc) => doc.kind === kind.value);
+                    return (
+                      <li
+                        key={kind.value}
+                        className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border-hairline)] px-3 py-2"
+                      >
+                        <span>
+                          {kind.title}
+                          {exists ? (
+                            <span className="ml-2 text-xs text-[var(--text-muted)]">есть</span>
+                          ) : null}
+                        </span>
+                        <span className="flex flex-wrap gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              void openAuthed(
+                                `/api/v1/deals/${id}/documents/preview?kind=${kind.value}`,
+                              )
+                            }
+                          >
+                            Просмотр
+                          </Button>
+                          <Button
+                            size="sm"
+                            loading={
+                              generateDocs.isPending && generateDocs.variables?.kind === kind.value
+                            }
+                            onClick={() => generateDocs.mutate({ kind: kind.value })}
+                          >
+                            Заполнить
+                          </Button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(event) => event.preventDefault()}>
+                <SelectField
+                  label="Скан или фото"
+                  value={docKind}
+                  onChange={(event) => setDocKind(event.target.value)}
+                  options={DOCUMENT_KINDS}
+                />
+                <TextField
+                  label="Название скана"
+                  value={docTitle}
+                  onChange={(event) => setDocTitle(event.target.value)}
+                  placeholder="Необязательно"
+                />
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sm:col-span-2 text-sm"
+                  disabled={attachDoc.isPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) attachDoc.mutate(file);
+                    event.target.value = '';
+                  }}
+                />
+              </form>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'chat' && (
+        <section className="panel space-y-3 p-3 sm:p-4">
+          <ul className="max-h-[22rem] space-y-3 overflow-y-auto">
             {(messages.data?.items ?? []).map((item) => (
               <li key={item.id} className={item.is_system ? 'text-xs text-[var(--text-muted)]' : ''}>
                 <p className="text-2xs text-[var(--text-muted)]">
@@ -547,12 +712,16 @@ export function DealDetailPage() {
               <li className="text-sm text-[var(--text-muted)]">Сообщений пока нет.</li>
             )}
           </ul>
-          <form onSubmit={(event) => void onSend(event)} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <form
+            onSubmit={(event) => void onSend(event)}
+            className="flex flex-col gap-2 border-t border-[var(--border-hairline)] pt-3 sm:flex-row sm:items-end"
+          >
             <div className="flex-1">
               <TextAreaField
                 rows={2}
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
+                placeholder="Сообщение"
               />
             </div>
             <Button type="submit" variant="primary" loading={send.isPending}>
@@ -560,25 +729,12 @@ export function DealDetailPage() {
             </Button>
           </form>
         </section>
+      )}
 
-        <div className="flex flex-col gap-6">
-          <section>
-            <h2 className="mb-3 text-sm font-medium">История этапов</h2>
-            <ol className="panel space-y-2 p-4 text-sm">
-              {history.map((entry, index) => (
-                <li key={`${entry.created_at}-${index}`}>
-                  <p className="font-medium">{entry.stage_title}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {entry.changed_by} · {formatDateTime(entry.created_at)}
-                    {entry.comment ? ` · ${entry.comment}` : ''}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-medium">Задачи</h2>
+      {tab === 'more' && (
+        <div className="flex flex-col gap-4">
+          <section className="panel space-y-3 p-3 sm:p-4">
+            <h2 className="text-sm font-medium">Задачи</h2>
             <ul className="space-y-2">
               {tasks.map((task) => (
                 <li key={task.id} className="flex items-center justify-between gap-2 text-sm">
@@ -601,10 +757,13 @@ export function DealDetailPage() {
                   )}
                 </li>
               ))}
+              {tasks.length === 0 && (
+                <li className="text-sm text-[var(--text-muted)]">Задач нет</li>
+              )}
             </ul>
             {can_manage && (
               <form
-                className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+                className="flex flex-col gap-2 sm:flex-row sm:items-end"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (taskTitle.trim()) addTask.mutate();
@@ -623,115 +782,53 @@ export function DealDetailPage() {
             )}
           </section>
 
-          <section>
-            <h2 className="mb-3 text-sm font-medium">Документы</h2>
-            <ul className="space-y-2 text-sm">
-              {documents
-                .filter((doc) => can_manage || doc.visible_to_client)
-                .map((doc) => (
-                  <li key={doc.id}>
-                    <button
-                      type="button"
-                      className="text-[var(--link)] underline underline-offset-4"
-                      onClick={() => void openAuthed(doc.url)}
-                    >
-                      {doc.title}
-                    </button>
-                    <span className="ml-2 text-xs text-[var(--text-muted)]">{doc.size_label}</span>
-                  </li>
-                ))}
-              {documents.length === 0 && (
-                <li className="text-[var(--text-muted)]">Формы ещё не собраны</li>
-              )}
-            </ul>
-            {can_manage && (
-              <div className="mt-3 flex flex-col gap-3">
-                <p className="text-xs text-[var(--text-muted)]">
-                  Пакет заполняется из профиля клиента, карточки дилера и лота. Пустые поля в форме —
-                  «не указано». Паспорт и адрес клиент указывает в профиле.
-                </p>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={docVisible}
-                    onChange={(event) => setDocVisible(event.target.checked)}
-                  />
-                  Показать клиенту
-                </label>
-                <Button
-                  variant="primary"
-                  loading={generateDocs.isPending && !generateDocs.variables?.kind}
-                  onClick={() => generateDocs.mutate({})}
-                >
-                  Сформировать пакет
-                </Button>
-                <ul className="flex flex-col gap-2">
-                  {PRINTABLE_KINDS.map((kind) => {
-                    const exists = documents.some((doc) => doc.kind === kind.value);
-                    return (
-                      <li
-                        key={kind.value}
-                        className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border-hairline)] px-3 py-2"
-                      >
-                        <span className="text-sm">
-                          {kind.title}
-                          {exists ? (
-                            <span className="ml-2 text-xs text-[var(--text-muted)]">есть</span>
-                          ) : null}
-                        </span>
-                        <span className="flex flex-wrap gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              void openAuthed(`/api/v1/deals/${id}/documents/preview?kind=${kind.value}`)
-                            }
-                          >
-                            Просмотр
-                          </Button>
-                          <Button
-                            size="sm"
-                            loading={generateDocs.isPending && generateDocs.variables?.kind === kind.value}
-                            onClick={() => generateDocs.mutate({ kind: kind.value })}
-                          >
-                            Заполнить
-                          </Button>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <form className="flex flex-col gap-2" onSubmit={(event) => event.preventDefault()}>
-                  <SelectField
-                    label="Скан или фото"
-                    value={docKind}
-                    onChange={(event) => setDocKind(event.target.value)}
-                    options={DOCUMENT_KINDS}
-                  />
-                  <TextField
-                    label="Название скана"
-                    value={docTitle}
-                    onChange={(event) => setDocTitle(event.target.value)}
-                    placeholder="Необязательно"
-                  />
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    disabled={attachDoc.isPending}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) attachDoc.mutate(file);
-                      event.target.value = '';
-                    }}
-                  />
-                </form>
-              </div>
-            )}
+          <section className="panel space-y-2 p-3 sm:p-4">
+            <h2 className="text-sm font-medium">История этапов</h2>
+            <ol className="max-h-48 space-y-2 overflow-y-auto text-sm">
+              {history.map((entry, index) => (
+                <li key={`${entry.created_at}-${index}`}>
+                  <p className="font-medium">{entry.stage_title}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {entry.changed_by} · {formatDateTime(entry.created_at)}
+                    {entry.comment ? ` · ${entry.comment}` : ''}
+                  </p>
+                </li>
+              ))}
+            </ol>
           </section>
 
+          {can_manage && deal.outcome === 'open' && (
+            <section className="panel flex flex-wrap items-end gap-3 p-3 sm:p-4">
+              <div className="min-w-0 flex-1 sm:min-w-56">
+                <TextField
+                  label="Причина отказа"
+                  value={lostReason}
+                  onChange={(event) => setLostReason(event.target.value)}
+                />
+              </div>
+              <Button
+                className="w-full sm:w-auto"
+                loading={closeDeal.isPending}
+                onClick={() => closeDeal.mutate({ outcome: 'lost', reason: lostReason })}
+              >
+                Закрыть как отказ
+              </Button>
+              {deal.stage === 'handover' && (
+                <Button
+                  variant="primary"
+                  className="w-full sm:w-auto"
+                  loading={closeDeal.isPending}
+                  onClick={() => closeDeal.mutate({ outcome: 'won', reason: '' })}
+                >
+                  Выдана, закрыть
+                </Button>
+              )}
+            </section>
+          )}
+
           {(existingReview || can_review) && (
-            <section>
-              <h2 className="mb-3 text-sm font-medium">Отзыв</h2>
+            <section className="panel space-y-3 p-3 sm:p-4">
+              <h2 className="text-sm font-medium">Отзыв</h2>
               {existingReview && (
                 <p className="text-sm">
                   Оценка {existingReview.rating} из 5
@@ -771,7 +868,7 @@ export function DealDetailPage() {
             </section>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
