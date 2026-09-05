@@ -1,4 +1,4 @@
-import type { Stage, StageMeta } from '@/lib/api';
+import type { DealOutcome, Stage, StageMeta } from '@/lib/api';
 import { stageBoardTitle, stageIndexLabel } from '@/lib/status';
 
 import { cn } from './cn';
@@ -8,25 +8,38 @@ import { cn } from './cn';
  *
  * Семь позиций из домена, не из макета: порядок и названия приходят с
  * сервера, чтобы кабинет дилера и карточка клиента не разъехались.
+ *
+ * Зелёный — пройденный путь (включая текущий на последнем этапе и после
+ * успешного закрытия). Оранжевый — текущий этап посреди воронки.
  */
 export function StageBar({
   stages,
   current,
   stale = false,
+  outcome = 'open',
 }: {
   stages: readonly StageMeta[];
   current: Stage;
   stale?: boolean;
+  outcome?: DealOutcome;
 }) {
   const currentIndex = stages.findIndex((item) => item.stage === current);
   const currentMeta = currentIndex >= 0 ? stages[currentIndex] : undefined;
+  const lastIndex = stages.length - 1;
+  const atLastStage = currentIndex === lastIndex;
+  // На последнем этапе путь по воронке пройден; после «выдана» — полностью закрыт.
+  const fillThroughCurrent =
+    outcome === 'won' || outcome === 'lost' || (outcome === 'open' && atLastStage);
 
   return (
     <div>
       <ol className="flex w-full min-w-0 gap-0" aria-label="Этапы сделки">
         {stages.map((meta, index) => {
-          const done = index < currentIndex;
-          const active = index === currentIndex;
+          const done =
+            outcome === 'won' ||
+            index < currentIndex ||
+            (fillThroughCurrent && index <= currentIndex);
+          const active = outcome === 'open' && index === currentIndex && !atLastStage;
 
           return (
             <li key={meta.stage} className="min-w-0 flex-1">
@@ -41,7 +54,7 @@ export function StageBar({
               <p
                 className={cn(
                   'mt-2 hidden truncate text-xs sm:block',
-                  active ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]',
+                  index === currentIndex ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]',
                 )}
                 title={meta.title}
               >

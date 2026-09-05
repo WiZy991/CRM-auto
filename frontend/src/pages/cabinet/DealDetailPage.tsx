@@ -333,7 +333,12 @@ export function DealDetailPage() {
 
       {stages.data && (
         <div className="panel space-y-2 p-3 sm:p-4">
-          <StageBar stages={stages.data.items} current={deal.stage} stale={deal.is_stale} />
+          <StageBar
+            stages={stages.data.items}
+            current={deal.stage}
+            stale={deal.is_stale}
+            outcome={deal.outcome}
+          />
           {deal.normative_days != null && (
             <p className="text-xs text-[var(--text-muted)]">
               На этапе {deal.days_on_stage} из {deal.normative_days} дн. (ориентир)

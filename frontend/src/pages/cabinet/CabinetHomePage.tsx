@@ -110,7 +110,12 @@ function ClientHome() {
                   </p>
                   {stages.data && (
                     <div className="mt-3">
-                      <StageBar stages={stages.data.items} current={deal.stage} stale={deal.is_stale} />
+                      <StageBar
+                        stages={stages.data.items}
+                        current={deal.stage}
+                        stale={deal.is_stale}
+                        outcome={deal.outcome}
+                      />
                     </div>
                   )}
                 </div>
