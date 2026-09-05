@@ -119,8 +119,10 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       HTTP_HOST: 0.0.0.0
-      # Ограничение памяти рантайма Go ниже лимита контейнера:
-      # сборщик мусора работает агрессивнее и процесс не убивается OOM-killer.
+      # Путь в контейнере (том ./storage/uploads). Не ../ из локального .env —
+      # иначе запись уходит мимо тома и загрузка фото даёт 500.
+      STORAGE_LOCAL_PATH: /app/storage/uploads
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost/uploads}
       GOMEMLIMIT: 400MiB
     depends_on:
       postgres:

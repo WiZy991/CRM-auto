@@ -91,6 +91,11 @@ func (d *Disk) SaveImage(r io.Reader, maxBytes, maxPixels int64) (*Image, error)
 	}
 	path := filepath.Join(d.dir, name)
 	if err := os.WriteFile(path, buf.Bytes(), 0o640); err != nil {
+		if os.IsPermission(err) || os.IsNotExist(err) {
+			return nil, apierr.Internal(fmt.Errorf(
+				"запись в %s: %w (проверьте STORAGE_LOCAL_PATH и права каталога uploads, UID 10001)",
+				d.dir, err))
+		}
 		return nil, apierr.Internal(fmt.Errorf("запись файла: %w", err))
 	}
 
