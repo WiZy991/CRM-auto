@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "golang.org/x/image/webp"
+
 	"github.com/autoimport/crm/internal/pkg/apierr"
 )
 
@@ -46,7 +48,7 @@ func NewDisk(dir string) (*Disk, error) {
 
 func (d *Disk) Dir() string { return d.dir }
 
-// SaveImage принимает JPEG или PNG, перекодирует в JPEG и пишет под случайным именем.
+// SaveImage принимает JPEG, PNG или WebP, перекодирует в JPEG и пишет под случайным именем.
 func (d *Disk) SaveImage(r io.Reader, maxBytes, maxPixels int64) (*Image, error) {
 	limited := io.LimitReader(r, maxBytes+1)
 	raw, err := io.ReadAll(limited)
@@ -56,11 +58,12 @@ func (d *Disk) SaveImage(r io.Reader, maxBytes, maxPixels int64) (*Image, error)
 	if int64(len(raw)) > maxBytes {
 		return nil, apierr.PayloadTooLarge("Файл слишком большой")
 	}
-	if len(raw) < 24 {
+	raw = stripBOM(raw)
+	if len(raw) < 12 {
 		return nil, apierr.BadRequest("Файл слишком короткий, чтобы быть изображением")
 	}
-	if !allowedMagic(raw) {
-		return nil, apierr.BadRequest("Допустимы только JPEG и PNG")
+	if kind := detectImageKind(raw); kind == "" {
+		return nil, apierr.BadRequest(rejectReason(raw))
 	}
 
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
@@ -98,14 +101,40 @@ func (d *Disk) SaveImage(r io.Reader, maxBytes, maxPixels int64) (*Image, error)
 	}, nil
 }
 
-func allowedMagic(raw []byte) bool {
+func stripBOM(raw []byte) []byte {
+	if len(raw) >= 3 && raw[0] == 0xef && raw[1] == 0xbb && raw[2] == 0xbf {
+		return raw[3:]
+	}
+	return raw
+}
+
+func detectImageKind(raw []byte) string {
 	if len(raw) >= 3 && raw[0] == 0xff && raw[1] == 0xd8 && raw[2] == 0xff {
-		return true
+		return "jpeg"
 	}
 	if len(raw) >= 8 && string(raw[:8]) == "\x89PNG\r\n\x1a\n" {
-		return true
+		return "png"
 	}
-	return false
+	// RIFF....WEBP
+	if len(raw) >= 12 && string(raw[:4]) == "RIFF" && string(raw[8:12]) == "WEBP" {
+		return "webp"
+	}
+	return ""
+}
+
+func rejectReason(raw []byte) string {
+	switch {
+	case len(raw) >= 12 && string(raw[:4]) == "RIFF" && string(raw[8:12]) == "WEBP":
+		return "Это WebP. Загрузите JPEG/PNG или обновите сервер с поддержкой WebP"
+	case len(raw) >= 12 && string(raw[4:8]) == "ftyp":
+		return "Это HEIC/HEIF с телефона. Сохраните снимок как JPEG или PNG"
+	case len(raw) >= 6 && (string(raw[:6]) == "GIF87a" || string(raw[:6]) == "GIF89a"):
+		return "GIF не принимается. Нужен JPEG или PNG"
+	case len(raw) >= 2 && string(raw[:2]) == "BM":
+		return "BMP не принимается. Нужен JPEG или PNG"
+	default:
+		return "Допустимы JPEG, PNG и WebP. Расширение .png не гарантирует формат — часто мессенджеры подменяют файл на WebP"
+	}
 }
 
 func randomName() (string, error) {
@@ -128,7 +157,7 @@ func FileServer(dir string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-			clean := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		clean := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if clean == "private" || strings.HasPrefix(clean, "private/") {
 			http.NotFound(w, r)
 			return
