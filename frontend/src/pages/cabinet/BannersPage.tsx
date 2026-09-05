@@ -99,6 +99,21 @@ export function BannersPage() {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  const remove = useMutation({
+    mutationFn: (id: string) => bannersApi.remove(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.bannersMine });
+      toast.success('Баннер удалён');
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  function confirmRemove(id: string, title: string) {
+    if (window.confirm(`Удалить баннер «${title}» безвозвратно?`)) {
+      remove.mutate(id);
+    }
+  }
+
   const stats = mine.data?.stats;
   const items = mine.data?.items ?? [];
 
@@ -190,7 +205,8 @@ export function BannersPage() {
               banner={row}
               onSubmit={() => submit.mutate(row.id)}
               onPause={(paused) => pause.mutate({ id: row.id, paused })}
-              busy={submit.isPending || pause.isPending}
+              onRemove={() => confirmRemove(row.id, row.title)}
+              busy={submit.isPending || pause.isPending || remove.isPending}
             />
           ))}
         </ul>
@@ -209,11 +225,13 @@ function BannerCard({
   banner,
   onSubmit,
   onPause,
+  onRemove,
   busy,
 }: {
   banner: Banner;
   onSubmit: () => void;
   onPause: (paused: boolean) => void;
+  onRemove: () => void;
   busy: boolean;
 }) {
   const place = PLACES.find((item) => item.id === banner.placement);
@@ -269,6 +287,9 @@ function BannerCard({
             Вернуть на сайт
           </Button>
         ) : null}
+        <Button size="sm" disabled={busy} onClick={onRemove}>
+          Удалить
+        </Button>
       </div>
     </li>
   );

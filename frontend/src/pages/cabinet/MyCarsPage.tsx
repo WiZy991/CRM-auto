@@ -47,6 +47,21 @@ export function MyCarsPage() {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  const remove = useMutation({
+    mutationFn: (id: string) => carsApi.remove(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cars'] });
+      toast.success('Объявление удалено');
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  function confirmRemove(id: string, title: string) {
+    if (window.confirm(`Удалить объявление «${title}» безвозвратно?`)) {
+      remove.mutate(id);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -112,6 +127,14 @@ export function MyCarsPage() {
                           На проверку
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          confirmRemove(row.id, row.title || `${row.brand} ${row.model}`)
+                        }
+                      >
+                        Удалить
+                      </Button>
                     </>
                   )}
                   {row.status === 'active' && (
@@ -125,7 +148,27 @@ export function MyCarsPage() {
                       <Button size="sm" onClick={() => status.mutate({ id: row.id, next: 'archived' })}>
                         Снять
                       </Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          confirmRemove(row.id, row.title || `${row.brand} ${row.model}`)
+                        }
+                      >
+                        Удалить
+                      </Button>
                     </>
+                  )}
+                  {(row.status === 'moderation' ||
+                    row.status === 'reserved' ||
+                    row.status === 'sold') && (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        confirmRemove(row.id, row.title || `${row.brand} ${row.model}`)
+                      }
+                    >
+                      Удалить
+                    </Button>
                   )}
                 </div>
               ),
