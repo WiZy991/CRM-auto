@@ -120,3 +120,55 @@ func TestDealIsStale(t *testing.T) {
 		t.Error("закрытая сделка не может быть зависшей")
 	}
 }
+
+func TestValidateStageAdvanceRequirements(t *testing.T) {
+	zero := int64(0)
+	amount := int64(1_500_000_00)
+
+	t.Run("назад без проверок", func(t *testing.T) {
+		deal := &Deal{Stage: StagePayment, AmountRubMinor: &zero}
+		if err := ValidateStageAdvanceRequirements(deal, StageContract, StageAdvanceEvidence{}); err != nil {
+			t.Fatalf("возврат не должен требовать гейтов: %v", err)
+		}
+	})
+
+	t.Run("к оплате нужна сумма", func(t *testing.T) {
+		deal := &Deal{Stage: StageContract, AmountRubMinor: &zero}
+		if err := ValidateStageAdvanceRequirements(deal, StagePayment, StageAdvanceEvidence{}); err == nil {
+			t.Fatal("ожидалась ошибка без суммы договора")
+		}
+		deal.AmountRubMinor = &amount
+		if err := ValidateStageAdvanceRequirements(deal, StagePayment, StageAdvanceEvidence{}); err != nil {
+			t.Fatalf("сумма есть — переход должен пройти: %v", err)
+		}
+	})
+
+	t.Run("к привозу нужна оплата или документ", func(t *testing.T) {
+		deal := &Deal{Stage: StagePayment, PaidRubMinor: 0}
+		if err := ValidateStageAdvanceRequirements(deal, StageShipping, StageAdvanceEvidence{}); err == nil {
+			t.Fatal("ожидалась ошибка без оплаты и платёжки")
+		}
+		if err := ValidateStageAdvanceRequirements(deal, StageShipping, StageAdvanceEvidence{HasPaymentDoc: true}); err != nil {
+			t.Fatalf("платёжка должна пропускать: %v", err)
+		}
+		deal.PaidRubMinor = 10_000_00
+		if err := ValidateStageAdvanceRequirements(deal, StageShipping, StageAdvanceEvidence{}); err != nil {
+			t.Fatalf("оплата должна пропускать: %v", err)
+		}
+	})
+
+	t.Run("к выдаче нужен СБКТС или декларация", func(t *testing.T) {
+		deal := &Deal{Stage: StageCustoms}
+		if err := ValidateStageAdvanceRequirements(deal, StageHandover, StageAdvanceEvidence{}); err == nil {
+			t.Fatal("ожидалась ошибка без СБКТС и декларации")
+		}
+		deal.SBKTSNumber = "СБКТС-1"
+		if err := ValidateStageAdvanceRequirements(deal, StageHandover, StageAdvanceEvidence{}); err != nil {
+			t.Fatalf("СБКТС должен пропускать: %v", err)
+		}
+		deal.SBKTSNumber = ""
+		if err := ValidateStageAdvanceRequirements(deal, StageHandover, StageAdvanceEvidence{HasCustomsDoc: true}); err != nil {
+			t.Fatalf("декларация должна пропускать: %v", err)
+		}
+	})
+}

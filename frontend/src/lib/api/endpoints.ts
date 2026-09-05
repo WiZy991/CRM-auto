@@ -306,6 +306,17 @@ export const dealsApi = {
       paid_rub_minor?: number;
       expected_handover_at?: string;
       manager_note?: string;
+      car_id?: string | null;
+      services_note?: string;
+      destination_port?: string;
+      shipping_tracking?: string;
+      customs_duties_rub_minor?: number;
+      sbkts_number?: string;
+      sbkts_issued_at?: string;
+      clear_sbkts_issued_at?: boolean;
+      arrived_at?: string;
+      clear_arrived_at?: boolean;
+      first_contacted_at?: string;
     },
   ): Promise<{ deal: Deal }> {
     return api.patch<{ deal: Deal }>(`/deals/${id}`, input);

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { dealsApi, errorMessage, getSession, uploadsApi } from '@/lib/api';
+import { carsApi, dealsApi, errorMessage, getSession, uploadsApi } from '@/lib/api';
 import type { Stage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
@@ -33,6 +33,14 @@ const DOCUMENT_KINDS = [
 
 const PRINTABLE_KINDS = DOCUMENT_KINDS.filter((item) => item.value !== 'other');
 
+function dateInput(value?: string): string {
+  return value ? value.slice(0, 10) : '';
+}
+
+function timelineItem(label: string, value?: string) {
+  return { label, value: value ? formatDateTime(value) : '—' };
+}
+
 export function DealDetailPage() {
   const { id = '' } = useParams();
   const toast = useToast();
@@ -50,10 +58,25 @@ export function DealDetailPage() {
   const [amountRub, setAmountRub] = useState('');
   const [paidRub, setPaidRub] = useState('');
   const [handover, setHandover] = useState('');
+  const [servicesNote, setServicesNote] = useState('');
+  const [carId, setCarId] = useState('');
+  const [destinationPort, setDestinationPort] = useState('');
+  const [shippingTracking, setShippingTracking] = useState('');
+  const [arrivedAt, setArrivedAt] = useState('');
+  const [customsDuties, setCustomsDuties] = useState('');
+  const [sbktsNumber, setSbktsNumber] = useState('');
+  const [sbktsIssuedAt, setSbktsIssuedAt] = useState('');
+  const [markContacted, setMarkContacted] = useState(false);
 
   const stages = useQuery({
     queryKey: queryKeys.stages,
     queryFn: ({ signal }) => dealsApi.stages(signal),
+  });
+
+  const myCars = useQuery({
+    queryKey: ['cars', 'my', 'deal-picker'],
+    queryFn: ({ signal }) => carsApi.mine({ limit: 50 }, signal),
+    enabled: Boolean(id),
   });
 
   const details = useQuery({
@@ -108,14 +131,30 @@ export function DealDetailPage() {
     mutationFn: () => {
       const amount = Number(amountRub.replace(/\s/g, '').replace(',', '.'));
       const paid = Number(paidRub.replace(/\s/g, '').replace(',', '.'));
+      const duties = Number(customsDuties.replace(/\s/g, '').replace(',', '.'));
       return dealsApi.update(id, {
         ...(Number.isFinite(amount) && amount > 0 ? { amount_minor: Math.round(amount * 100) } : {}),
         ...(Number.isFinite(paid) && paid >= 0 ? { paid_rub_minor: Math.round(paid * 100) } : {}),
         ...(handover ? { expected_handover_at: `${handover}T00:00:00Z` } : {}),
+        services_note: servicesNote,
+        destination_port: destinationPort,
+        shipping_tracking: shippingTracking,
+        sbkts_number: sbktsNumber,
+        ...(Number.isFinite(duties) && duties >= 0
+          ? { customs_duties_rub_minor: Math.round(duties * 100) }
+          : {}),
+        ...(arrivedAt ? { arrived_at: `${arrivedAt}T12:00:00Z` } : { clear_arrived_at: true }),
+        ...(sbktsIssuedAt
+          ? { sbkts_issued_at: `${sbktsIssuedAt}T12:00:00Z` }
+          : { clear_sbkts_issued_at: true }),
+        ...(carId ? { car_id: carId } : { car_id: '' }),
+        ...(markContacted && !details.data?.deal.first_contacted_at
+          ? { first_contacted_at: new Date().toISOString() }
+          : {}),
       });
     },
     onSuccess: () => {
-      toast.success('Суммы сохранены');
+      toast.success('Данные сделки сохранены');
       invalidate();
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -194,6 +233,19 @@ export function DealDetailPage() {
     setAmountRub(deal.amount_minor != null ? String(Math.round(deal.amount_minor / 100)) : '');
     setPaidRub(deal.paid_rub_minor ? String(Math.round(deal.paid_rub_minor / 100)) : '');
     setHandover(deal.expected_handover_at ? deal.expected_handover_at.slice(0, 10) : '');
+    setServicesNote(deal.services_note ?? '');
+    setCarId(deal.car_id ?? '');
+    setDestinationPort(deal.destination_port ?? '');
+    setShippingTracking(deal.shipping_tracking ?? '');
+    setArrivedAt(dateInput(deal.arrived_at));
+    setCustomsDuties(
+      deal.customs_duties_rub_minor != null
+        ? String(Math.round(deal.customs_duties_rub_minor / 100))
+        : '',
+    );
+    setSbktsNumber(deal.sbkts_number ?? '');
+    setSbktsIssuedAt(dateInput(deal.sbkts_issued_at));
+    setMarkContacted(Boolean(deal.first_contacted_at));
   }, [details.data?.deal.stage, details.data?.deal.updated_at, details.data?.next_stages]);
 
   if (details.isPending) return <FullPageSpinner label="Открываем сделку" />;
@@ -245,6 +297,40 @@ export function DealDetailPage() {
         <StageBar stages={stages.data.items} current={deal.stage} stale={deal.is_stale} />
       )}
 
+      <section className="panel space-y-3 p-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+            Статус для клиента
+          </p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            {deal.client_hint ||
+              stages.data?.items.find((item) => item.stage === deal.stage)?.client_hint ||
+              deal.stage_title}
+          </p>
+          {deal.normative_days != null && (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Ориентир этапа: {deal.normative_days} дн. · на этапе уже {deal.days_on_stage} дн.
+            </p>
+          )}
+        </div>
+        <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            timelineItem('Первый контакт', deal.first_contacted_at),
+            timelineItem('Договор', deal.contract_signed_at),
+            timelineItem('Оплата', deal.paid_at),
+            timelineItem('Отгрузка', deal.shipped_at),
+            timelineItem('Прибытие в порт', deal.arrived_at),
+            timelineItem('Растаможка', deal.customs_cleared_at),
+            timelineItem('Выдача', deal.handed_over_at),
+          ].map((item) => (
+            <li key={item.label} className="rounded-md bg-[var(--surface-muted)] px-3 py-2 text-sm">
+              <p className="text-xs text-[var(--text-muted)]">{item.label}</p>
+              <p className="mt-0.5 font-medium">{item.value}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {can_manage && next_stages.length > 0 && (
         <section className="panel flex flex-wrap items-end gap-3 p-4">
           <div className="w-full sm:w-56">
@@ -272,13 +358,53 @@ export function DealDetailPage() {
           >
             Перевести
           </Button>
+          <p className="w-full text-xs text-[var(--text-muted)]">
+            К оплате нужна сумма договора. К привозу — оплата или платёжка. К выдаче — СБКТС или
+            таможенная декларация.
+          </p>
         </section>
       )}
 
       {can_manage && (
-        <section className="panel grid gap-3 p-4 sm:grid-cols-3">
+        <section className="panel grid gap-3 p-4 sm:grid-cols-2">
+          {(deal.stage === 'lead' || !deal.first_contacted_at) && (
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={markContacted}
+                onChange={(event) => setMarkContacted(event.target.checked)}
+              />
+              Первый контакт с клиентом состоялся
+            </label>
+          )}
+
+          <div className="sm:col-span-2">
+            <SelectField
+              label="Лот из каталога"
+              value={carId}
+              onChange={(event) => setCarId(event.target.value)}
+              placeholder="Без привязки"
+              options={[
+                { value: '', title: 'Без привязки' },
+                ...(myCars.data?.items ?? []).map((car) => ({
+                  value: car.id,
+                  title: car.title || `${car.brand ?? ''} ${car.model ?? ''}`.trim() || car.id,
+                })),
+              ]}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <TextAreaField
+              label="Состав услуг по договору"
+              rows={3}
+              value={servicesNote}
+              onChange={(event) => setServicesNote(event.target.value)}
+            />
+          </div>
+
           <TextField
-            label="Сумма, ₽"
+            label="Сумма договора, ₽"
             inputMode="decimal"
             value={amountRub}
             onChange={(event) => setAmountRub(event.target.value)}
@@ -290,21 +416,89 @@ export function DealDetailPage() {
             onChange={(event) => setPaidRub(event.target.value)}
           />
           <TextField
+            label="Порт назначения"
+            value={destinationPort}
+            onChange={(event) => setDestinationPort(event.target.value)}
+          />
+          <TextField
+            label="Трекинг / путь"
+            value={shippingTracking}
+            onChange={(event) => setShippingTracking(event.target.value)}
+          />
+          <TextField
+            label="Прибытие в порт"
+            type="date"
+            value={arrivedAt}
+            onChange={(event) => setArrivedAt(event.target.value)}
+          />
+          <TextField
+            label="Пошлины и сборы, ₽"
+            inputMode="decimal"
+            value={customsDuties}
+            onChange={(event) => setCustomsDuties(event.target.value)}
+          />
+          <TextField
+            label="Номер СБКТС"
+            value={sbktsNumber}
+            onChange={(event) => setSbktsNumber(event.target.value)}
+          />
+          <TextField
+            label="Дата СБКТС"
+            type="date"
+            value={sbktsIssuedAt}
+            onChange={(event) => setSbktsIssuedAt(event.target.value)}
+          />
+          <TextField
             label="План выдачи"
             type="date"
             value={handover}
             onChange={(event) => setHandover(event.target.value)}
           />
-          <div className="sm:col-span-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+          <div className="sm:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-[var(--text-muted)]">
               {deal.paid_share > 0
                 ? `Оплачено ${Math.round(deal.paid_share * 100)}%`
                 : 'На этапе «Оплата» зафиксируйте сумму и платёжку в документах.'}
             </p>
-            <Button size="sm" className="w-full sm:w-auto" loading={saveFinance.isPending} onClick={() => saveFinance.mutate()}>
-              Сохранить суммы
+            <Button
+              size="sm"
+              className="w-full sm:w-auto"
+              loading={saveFinance.isPending}
+              onClick={() => saveFinance.mutate()}
+            >
+              Сохранить данные этапа
             </Button>
           </div>
+        </section>
+      )}
+
+      {!can_manage && (
+        <section className="panel grid gap-2 p-4 text-sm sm:grid-cols-2">
+          {deal.destination_port && (
+            <p>
+              <span className="text-[var(--text-muted)]">Порт: </span>
+              {deal.destination_port}
+            </p>
+          )}
+          {deal.shipping_tracking && (
+            <p className="sm:col-span-2">
+              <span className="text-[var(--text-muted)]">Путь: </span>
+              {deal.shipping_tracking}
+            </p>
+          )}
+          {deal.sbkts_number && (
+            <p>
+              <span className="text-[var(--text-muted)]">СБКТС: </span>
+              {deal.sbkts_number}
+            </p>
+          )}
+          {deal.services_note && (
+            <p className="sm:col-span-2">
+              <span className="text-[var(--text-muted)]">Услуги: </span>
+              {deal.services_note}
+            </p>
+          )}
         </section>
       )}
 

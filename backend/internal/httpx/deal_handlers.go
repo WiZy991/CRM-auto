@@ -69,10 +69,26 @@ type dealResponse struct {
 	PaidRubMinor   int64   `json:"paid_rub_minor"`
 	PaidShare      float64 `json:"paid_share"`
 
+	ServicesNote          string     `json:"services_note,omitempty"`
+	DestinationPort       string     `json:"destination_port,omitempty"`
+	ShippingTracking      string     `json:"shipping_tracking,omitempty"`
+	CustomsDutiesRubMinor *int64     `json:"customs_duties_rub_minor,omitempty"`
+	SBKTSNumber           string     `json:"sbkts_number,omitempty"`
+	SBKTSIssuedAt         *time.Time `json:"sbkts_issued_at,omitempty"`
+	FirstContactedAt      *time.Time `json:"first_contacted_at,omitempty"`
+	ContractSignedAt      *time.Time `json:"contract_signed_at,omitempty"`
+	PaidAt                *time.Time `json:"paid_at,omitempty"`
+	ShippedAt             *time.Time `json:"shipped_at,omitempty"`
+	ArrivedAt             *time.Time `json:"arrived_at,omitempty"`
+	CustomsClearedAt      *time.Time `json:"customs_cleared_at,omitempty"`
+	HandedOverAt          *time.Time `json:"handed_over_at,omitempty"`
+
 	StageChangedAt     time.Time  `json:"stage_changed_at"`
 	DaysOnStage        int        `json:"days_on_stage"`
 	IsStale            bool       `json:"is_stale"`
 	ExpectedHandoverAt *time.Time `json:"expected_handover_at,omitempty"`
+	ClientHint         string     `json:"client_hint"`
+	NormativeDays      int        `json:"normative_days"`
 
 	LostReason  string `json:"lost_reason,omitempty"`
 	ManagerNote string `json:"manager_note,omitempty"`
@@ -84,6 +100,7 @@ type dealResponse struct {
 
 func toDealResponse(deal *domain.Deal) dealResponse {
 	now := time.Now()
+	meta := deal.Stage.Meta()
 
 	response := dealResponse{
 		ID:       deal.ID,
@@ -104,10 +121,26 @@ func toDealResponse(deal *domain.Deal) dealResponse {
 		AmountRubMinor: deal.AmountRubMinor,
 		PaidRubMinor:   deal.PaidRubMinor,
 
+		ServicesNote:          deal.ServicesNote,
+		DestinationPort:       deal.DestinationPort,
+		ShippingTracking:      deal.ShippingTracking,
+		CustomsDutiesRubMinor: deal.CustomsDutiesRubMinor,
+		SBKTSNumber:           deal.SBKTSNumber,
+		SBKTSIssuedAt:         deal.SBKTSIssuedAt,
+		FirstContactedAt:      deal.FirstContactedAt,
+		ContractSignedAt:      deal.ContractSignedAt,
+		PaidAt:                deal.PaidAt,
+		ShippedAt:             deal.ShippedAt,
+		ArrivedAt:             deal.ArrivedAt,
+		CustomsClearedAt:      deal.CustomsClearedAt,
+		HandedOverAt:          deal.HandedOverAt,
+
 		StageChangedAt:     deal.StageChangedAt,
 		DaysOnStage:        deal.DaysOnStage(now),
 		IsStale:            deal.IsStale(now),
 		ExpectedHandoverAt: deal.ExpectedHandoverAt,
+		ClientHint:         meta.ClientHint,
+		NormativeDays:      meta.NormativeDays,
 
 		LostReason:  deal.LostReason,
 		ManagerNote: deal.ManagerNote,
@@ -505,6 +538,18 @@ type updateDealBody struct {
 	ExpectedHandoverAt *time.Time `json:"expected_handover_at"`
 	ManagerNote        *string    `json:"manager_note"`
 	SellerID           string     `json:"seller_id"`
+
+	CarID                 *string    `json:"car_id"`
+	ServicesNote          *string    `json:"services_note"`
+	DestinationPort       *string    `json:"destination_port"`
+	ShippingTracking      *string    `json:"shipping_tracking"`
+	CustomsDutiesRubMinor *int64     `json:"customs_duties_rub_minor"`
+	SBKTSNumber           *string    `json:"sbkts_number"`
+	SBKTSIssuedAt         *time.Time `json:"sbkts_issued_at"`
+	ClearSBKTSIssuedAt    bool       `json:"clear_sbkts_issued_at"`
+	ArrivedAt             *time.Time `json:"arrived_at"`
+	ClearArrivedAt        bool       `json:"clear_arrived_at"`
+	FirstContactedAt      *time.Time `json:"first_contacted_at"`
 }
 
 // Update — PATCH /api/v1/deals/{id}
@@ -522,13 +567,24 @@ func (h *DealHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deal, err := h.pipeline.UpdateDeal(r.Context(), dealID, viewerFrom(r), service.UpdateDealForm{
-		Title:              body.Title,
-		AmountMinor:        body.AmountMinor,
-		Currency:           body.Currency,
-		PaidRubMinor:       body.PaidRubMinor,
-		ExpectedHandoverAt: body.ExpectedHandoverAt,
-		ManagerNote:        body.ManagerNote,
-		SellerID:           body.SellerID,
+		Title:                 body.Title,
+		AmountMinor:           body.AmountMinor,
+		Currency:              body.Currency,
+		PaidRubMinor:          body.PaidRubMinor,
+		ExpectedHandoverAt:    body.ExpectedHandoverAt,
+		ManagerNote:           body.ManagerNote,
+		SellerID:              body.SellerID,
+		CarID:                 body.CarID,
+		ServicesNote:          body.ServicesNote,
+		DestinationPort:       body.DestinationPort,
+		ShippingTracking:      body.ShippingTracking,
+		CustomsDutiesRubMinor: body.CustomsDutiesRubMinor,
+		SBKTSNumber:           body.SBKTSNumber,
+		SBKTSIssuedAt:         body.SBKTSIssuedAt,
+		ClearSBKTSIssuedAt:    body.ClearSBKTSIssuedAt,
+		ArrivedAt:             body.ArrivedAt,
+		ClearArrivedAt:        body.ClearArrivedAt,
+		FirstContactedAt:      body.FirstContactedAt,
 	})
 	if err != nil {
 		Error(w, r, err)

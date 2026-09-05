@@ -248,6 +248,20 @@ type Deal struct {
 	AmountRubMinor *int64
 	PaidRubMinor   int64
 
+	ServicesNote           string
+	DestinationPort        string
+	ShippingTracking       string
+	CustomsDutiesRubMinor  *int64
+	SBKTSNumber            string
+	SBKTSIssuedAt          *time.Time
+	FirstContactedAt       *time.Time
+	ContractSignedAt       *time.Time
+	PaidAt                 *time.Time
+	ShippedAt              *time.Time
+	ArrivedAt              *time.Time
+	CustomsClearedAt       *time.Time
+	HandedOverAt           *time.Time
+
 	StageChangedAt     time.Time
 	ExpectedHandoverAt *time.Time
 	LostReason         string
@@ -256,6 +270,48 @@ type Deal struct {
 	ClosedAt  *time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// StageAdvanceEvidence — факты, нужные для проверок перехода вперёд.
+type StageAdvanceEvidence struct {
+	HasPaymentDoc bool // invoice или payment_order
+	HasCustomsDoc bool // customs_declaration
+}
+
+// ValidateStageAdvanceRequirements проверяет бизнес-условия при движении вперёд.
+func ValidateStageAdvanceRequirements(deal *Deal, to Stage, evidence StageAdvanceEvidence) error {
+	if deal == nil {
+		return &StageTransitionError{To: to, Reason: "сделка не загружена"}
+	}
+	from := deal.Stage
+	if to.Position() <= from.Position() {
+		return nil
+	}
+
+	switch to {
+	case StagePayment:
+		amount := int64(0)
+		if deal.AmountRubMinor != nil {
+			amount = *deal.AmountRubMinor
+		} else if deal.AmountMinor != nil {
+			amount = *deal.AmountMinor
+		}
+		if amount <= 0 {
+			return &StageTransitionError{From: from, To: to,
+				Reason: "укажите сумму договора перед переходом к оплате"}
+		}
+	case StageShipping:
+		if deal.PaidRubMinor <= 0 && !evidence.HasPaymentDoc {
+			return &StageTransitionError{From: from, To: to,
+				Reason: "внесите оплату или приложите платёжный документ перед привозом"}
+		}
+	case StageHandover:
+		if strings.TrimSpace(deal.SBKTSNumber) == "" && !evidence.HasCustomsDoc {
+			return &StageTransitionError{From: from, To: to,
+				Reason: "укажите номер СБКТС или приложите таможенную декларацию перед выдачей"}
+		}
+	}
+	return nil
 }
 
 // IsParticipant проверяет, относится ли пользователь к сделке.

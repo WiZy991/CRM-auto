@@ -197,10 +197,26 @@ export interface Deal {
   paid_rub_minor: number;
   paid_share: number;
 
+  services_note?: string;
+  destination_port?: string;
+  shipping_tracking?: string;
+  customs_duties_rub_minor?: number;
+  sbkts_number?: string;
+  sbkts_issued_at?: Timestamp;
+  first_contacted_at?: Timestamp;
+  contract_signed_at?: Timestamp;
+  paid_at?: Timestamp;
+  shipped_at?: Timestamp;
+  arrived_at?: Timestamp;
+  customs_cleared_at?: Timestamp;
+  handed_over_at?: Timestamp;
+
   stage_changed_at: Timestamp;
   days_on_stage: number;
   is_stale: boolean;
   expected_handover_at?: Timestamp;
+  client_hint?: string;
+  normative_days?: number;
 
   lost_reason?: string;
   manager_note?: string;

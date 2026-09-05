@@ -63,6 +63,9 @@ export function StageBar({
           </span>
         </p>
       )}
+      {currentMeta?.client_hint && (
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">{currentMeta.client_hint}</p>
+      )}
     </div>
   );
 }

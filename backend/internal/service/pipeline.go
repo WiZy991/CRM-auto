@@ -530,6 +530,27 @@ func (p *Pipeline) ChangeStage(ctx context.Context, dealID uuid.UUID, viewer Vie
 
 	fromStage := access.Deal.Stage
 
+	if stage.Position() > fromStage.Position() {
+		hasPaymentDoc, err := p.comms.HasAnyDocumentKinds(ctx, dealID, []store.DocumentKind{
+			store.DocInvoice, store.DocPayment,
+		})
+		if err != nil {
+			return nil, apierr.Internal(err)
+		}
+		hasCustomsDoc, err := p.comms.HasAnyDocumentKinds(ctx, dealID, []store.DocumentKind{
+			store.DocCustoms,
+		})
+		if err != nil {
+			return nil, apierr.Internal(err)
+		}
+		if err := domain.ValidateStageAdvanceRequirements(access.Deal, stage, domain.StageAdvanceEvidence{
+			HasPaymentDoc: hasPaymentDoc,
+			HasCustomsDoc: hasCustomsDoc,
+		}); err != nil {
+			return nil, apierr.Conflict(err.Error())
+		}
+	}
+
 	deal, err := p.deals.ChangeStage(ctx, store.ChangeStageParams{
 		DealID:    dealID,
 		DealerID:  viewer.UserID,
@@ -642,6 +663,21 @@ type UpdateDealForm struct {
 	ExpectedHandoverAt *time.Time
 	ManagerNote        *string
 	SellerID           string
+
+	// CarID: nil — не менять; "" — отвязать лот; uuid — привязать.
+	CarID *string
+
+	ServicesNote          *string
+	DestinationPort       *string
+	ShippingTracking      *string
+	CustomsDutiesRubMinor *int64
+	SBKTSNumber           *string
+	// SBKTSIssuedAt: nil — не менять; zero time — очистить; иначе установить.
+	SBKTSIssuedAt *time.Time
+	ClearSBKTSIssuedAt bool
+	ArrivedAt          *time.Time
+	ClearArrivedAt     bool
+	FirstContactedAt   *time.Time
 }
 
 // UpdateDeal меняет реквизиты сделки.
@@ -659,11 +695,37 @@ func (p *Pipeline) UpdateDeal(ctx context.Context, dealID uuid.UUID, viewer View
 		AmountMinor:        form.AmountMinor,
 		PaidRubMinor:       form.PaidRubMinor,
 		ExpectedHandoverAt: form.ExpectedHandoverAt,
+		CustomsDutiesRubMinor: form.CustomsDutiesRubMinor,
+		FirstContactedAt:   form.FirstContactedAt,
+		ClearSBKTSIssuedAt: form.ClearSBKTSIssuedAt,
+		ClearArrivedAt:     form.ClearArrivedAt,
+	}
+	if form.SBKTSIssuedAt != nil && !form.ClearSBKTSIssuedAt {
+		params.SBKTSIssuedAt = form.SBKTSIssuedAt
+	}
+	if form.ArrivedAt != nil && !form.ClearArrivedAt {
+		params.ArrivedAt = form.ArrivedAt
 	}
 
 	if form.ManagerNote != nil {
 		note := normalizeShortText(*form.ManagerNote, 4000)
 		params.ManagerNote = &note
+	}
+	if form.ServicesNote != nil {
+		note := normalizeShortText(*form.ServicesNote, 4000)
+		params.ServicesNote = &note
+	}
+	if form.DestinationPort != nil {
+		port := normalizeShortText(*form.DestinationPort, 200)
+		params.DestinationPort = &port
+	}
+	if form.ShippingTracking != nil {
+		track := normalizeShortText(*form.ShippingTracking, 2000)
+		params.ShippingTracking = &track
+	}
+	if form.SBKTSNumber != nil {
+		num := normalizeShortText(*form.SBKTSNumber, 120)
+		params.SBKTSNumber = &num
 	}
 	if form.SellerID != "" {
 		sellerID, err := uuid.Parse(form.SellerID)
@@ -671,6 +733,18 @@ func (p *Pipeline) UpdateDeal(ctx context.Context, dealID uuid.UUID, viewer View
 			return nil, apierr.BadRequest("Некорректный идентификатор продавца")
 		}
 		params.SellerID = &sellerID
+	}
+	if form.CarID != nil {
+		raw := strings.TrimSpace(*form.CarID)
+		if raw == "" {
+			params.ClearCarID = true
+		} else {
+			carID, err := uuid.Parse(raw)
+			if err != nil {
+				return nil, apierr.BadRequest("Некорректный идентификатор автомобиля")
+			}
+			params.CarID = &carID
+		}
 	}
 
 	if form.Currency != "" {

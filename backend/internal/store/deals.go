@@ -25,6 +25,11 @@ const dealColumns = `
 	deals.client_id, deals.dealer_id, deals.car_id, deals.seller_id,
 	deals.stage, deals.outcome,
 	deals.title, deals.amount_minor, deals.currency, deals.amount_rub_minor, deals.paid_rub_minor,
+	deals.services_note, deals.destination_port, deals.shipping_tracking,
+	deals.customs_duties_rub_minor, deals.sbkts_number, deals.sbkts_issued_at,
+	deals.first_contacted_at,
+	deals.contract_signed_at, deals.paid_at, deals.shipped_at, deals.arrived_at,
+	deals.customs_cleared_at, deals.handed_over_at,
 	deals.stage_changed_at, deals.expected_handover_at,
 	COALESCE(deals.lost_reason, ''), deals.manager_note,
 	deals.closed_at, deals.created_at, deals.updated_at`
@@ -36,6 +41,11 @@ func scanDeal(row pgx.Row) (*domain.Deal, error) {
 		&deal.ClientID, &deal.DealerID, &deal.CarID, &deal.SellerID,
 		&deal.Stage, &deal.Outcome,
 		&deal.Title, &deal.AmountMinor, &deal.Currency, &deal.AmountRubMinor, &deal.PaidRubMinor,
+		&deal.ServicesNote, &deal.DestinationPort, &deal.ShippingTracking,
+		&deal.CustomsDutiesRubMinor, &deal.SBKTSNumber, &deal.SBKTSIssuedAt,
+		&deal.FirstContactedAt,
+		&deal.ContractSignedAt, &deal.PaidAt, &deal.ShippedAt, &deal.ArrivedAt,
+		&deal.CustomsClearedAt, &deal.HandedOverAt,
 		&deal.StageChangedAt, &deal.ExpectedHandoverAt,
 		&deal.LostReason, &deal.ManagerNote,
 		&deal.ClosedAt, &deal.CreatedAt, &deal.UpdatedAt,
@@ -352,6 +362,10 @@ func (d *Deals) ChangeStage(ctx context.Context, params ChangeStageParams) (*dom
 			UPDATE deals SET
 				stage = $2::deal_stage,
 				stage_changed_at = now(),
+				first_contacted_at = CASE
+					WHEN $3::boolean THEN COALESCE(first_contacted_at, now())
+					ELSE first_contacted_at
+				END,
 				contract_signed_at = CASE WHEN $2::deal_stage = 'contract' THEN COALESCE(contract_signed_at, now()) ELSE contract_signed_at END,
 				paid_at            = CASE WHEN $2::deal_stage = 'payment'  THEN COALESCE(paid_at, now())            ELSE paid_at END,
 				shipped_at         = CASE WHEN $2::deal_stage = 'shipping' THEN COALESCE(shipped_at, now())         ELSE shipped_at END,
@@ -359,7 +373,8 @@ func (d *Deals) ChangeStage(ctx context.Context, params ChangeStageParams) (*dom
 				handed_over_at     = CASE WHEN $2::deal_stage = 'handover' THEN COALESCE(handed_over_at, now())     ELSE handed_over_at END
 			WHERE id = $1
 			RETURNING `+dealColumns,
-			params.DealID, string(params.ToStage))
+			params.DealID, string(params.ToStage),
+			currentStage == domain.StageLead && params.ToStage != domain.StageLead)
 
 		deal, err := scanDeal(row)
 		if err != nil {
@@ -514,6 +529,20 @@ type UpdateDealParams struct {
 	ExpectedHandoverAt *time.Time
 	ManagerNote        *string
 	SellerID           *uuid.UUID
+
+	CarID      *uuid.UUID
+	ClearCarID bool
+
+	ServicesNote          *string
+	DestinationPort       *string
+	ShippingTracking      *string
+	CustomsDutiesRubMinor *int64
+	SBKTSNumber           *string
+	SBKTSIssuedAt         *time.Time
+	ClearSBKTSIssuedAt    bool
+	ArrivedAt             *time.Time
+	ClearArrivedAt        bool
+	FirstContactedAt      *time.Time
 }
 
 // Update изменяет реквизиты сделки.
@@ -532,12 +561,39 @@ func (d *Deals) Update(ctx context.Context, params UpdateDealParams) (*domain.De
 			paid_rub_minor = COALESCE($7, paid_rub_minor),
 			expected_handover_at = COALESCE($8, expected_handover_at),
 			manager_note = COALESCE($9, manager_note),
-			seller_id = COALESCE($10, seller_id)
+			seller_id = COALESCE($10, seller_id),
+			car_id = CASE
+				WHEN $11::boolean THEN NULL
+				WHEN $12::uuid IS NOT NULL THEN $12
+				ELSE car_id
+			END,
+			services_note = COALESCE($13, services_note),
+			destination_port = COALESCE($14, destination_port),
+			shipping_tracking = COALESCE($15, shipping_tracking),
+			customs_duties_rub_minor = COALESCE($16, customs_duties_rub_minor),
+			sbkts_number = COALESCE($17, sbkts_number),
+			sbkts_issued_at = CASE
+				WHEN $18::boolean THEN NULL
+				WHEN $19::timestamptz IS NOT NULL THEN $19
+				ELSE sbkts_issued_at
+			END,
+			arrived_at = CASE
+				WHEN $20::boolean THEN NULL
+				WHEN $21::timestamptz IS NOT NULL THEN $21
+				ELSE arrived_at
+			END,
+			first_contacted_at = COALESCE($22, first_contacted_at)
 		WHERE id = $1 AND %s
 		RETURNING %s`, accessCondition, dealColumns),
 		params.DealID, params.DealerID,
 		params.Title, params.AmountMinor, nullableCurrency(params.Currency), params.AmountRubMinor,
-		params.PaidRubMinor, params.ExpectedHandoverAt, params.ManagerNote, params.SellerID)
+		params.PaidRubMinor, params.ExpectedHandoverAt, params.ManagerNote, params.SellerID,
+		params.ClearCarID, params.CarID,
+		params.ServicesNote, params.DestinationPort, params.ShippingTracking,
+		params.CustomsDutiesRubMinor, params.SBKTSNumber,
+		params.ClearSBKTSIssuedAt, params.SBKTSIssuedAt,
+		params.ClearArrivedAt, params.ArrivedAt,
+		params.FirstContactedAt)
 
 	return scanDeal(row)
 }

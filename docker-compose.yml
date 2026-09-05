@@ -115,8 +115,9 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       REDIS_ADDR: redis:6379
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
+      # SMTP из .env (Mail.ru и т.п.). Для локальной отладки без ящика: SMTP_HOST=mailpit SMTP_PORT=1025
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       HTTP_HOST: 0.0.0.0
       # Ограничение памяти рантайма Go ниже лимита контейнера:
       # сборщик мусора работает агрессивнее и процесс не убивается OOM-killer.
@@ -156,8 +157,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       REDIS_ADDR: redis:6379
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       GOMEMLIMIT: 200MiB
     depends_on:
       postgres:

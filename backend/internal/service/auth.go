@@ -407,7 +407,14 @@ func (a *Auth) findByLogin(ctx context.Context, login string) (*store.UserRecord
 		return record, err
 	}
 
-	record, err := a.users.ByPhone(ctx, login)
+	// Та же нормализация, что при регистрации: 8… и 7… сходятся в +7…,
+	// иначе вход по «тому же» номеру, что при регистрации, не находит пользователя.
+	phone := strings.TrimSpace(login)
+	if normalized, err := normalizePhone(phone); err == nil {
+		phone = normalized
+	}
+
+	record, err := a.users.ByPhone(ctx, phone)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}

@@ -449,6 +449,27 @@ func (c *DealComms) Documents(ctx context.Context, dealID uuid.UUID, onlyClientV
 	return out, rows.Err()
 }
 
+// HasAnyDocumentKinds сообщает, есть ли у сделки хотя бы один документ из списка видов.
+func (c *DealComms) HasAnyDocumentKinds(ctx context.Context, dealID uuid.UUID, kinds []DocumentKind) (bool, error) {
+	if len(kinds) == 0 {
+		return false, nil
+	}
+	values := make([]string, len(kinds))
+	for i, kind := range kinds {
+		values[i] = string(kind)
+	}
+	var exists bool
+	err := c.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM deal_documents
+			WHERE deal_id = $1 AND kind = ANY($2::document_kind[])
+		)`, dealID, values).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("проверка документов сделки: %w", err)
+	}
+	return exists, nil
+}
+
 // DocumentForDownload возвращает документ с проверкой доступа.
 //
 // Проверка встроена в запрос: документ отдаётся только участнику сделки, а

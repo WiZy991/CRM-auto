@@ -177,6 +177,31 @@ func TestDealerVisibleAndRequestBecomesDeal(t *testing.T) {
 	if moved.Stage != domain.StageNeeds {
 		t.Fatalf("этап %s, ожидалось needs", moved.Stage)
 	}
+	if moved.FirstContactedAt == nil {
+		t.Fatal("при уходе с лида должен зафиксироваться первый контакт")
+	}
+
+	port := "Владивосток"
+	tracking := "TRACK-ITEST-1"
+	services := "подбор + логистика"
+	arrived := time.Now().UTC().Truncate(time.Second)
+	updated, err := deals.Update(ctx, UpdateDealParams{
+		DealID:           deal.ID,
+		DealerID:         dealer.ID,
+		ServicesNote:     &services,
+		DestinationPort:  &port,
+		ShippingTracking: &tracking,
+		ArrivedAt:        &arrived,
+	})
+	if err != nil {
+		t.Fatalf("PATCH полей этапа: %v", err)
+	}
+	if updated.ServicesNote != services || updated.DestinationPort != port || updated.ShippingTracking != tracking {
+		t.Fatalf("логистические поля не сохранились: %+v", updated)
+	}
+	if updated.ArrivedAt == nil {
+		t.Fatal("arrived_at не сохранился")
+	}
 }
 
 func testPool(t *testing.T) *Pool {
