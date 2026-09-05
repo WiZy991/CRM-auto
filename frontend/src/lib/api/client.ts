@@ -205,7 +205,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
 
   if (UNSAFE_METHODS.has(method)) {
-    const csrf = readCsrfCookie();
+    // Cookie предпочтительна (double-submit); если Secure-cookie не сохранилась
+    // на HTTP — берём значение из сессии после login/refresh.
+    const csrf = readCsrfCookie() || getSession()?.csrfToken || '';
     if (csrf) headers.set('X-CSRF-Token', csrf);
   }
 

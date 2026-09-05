@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -24,6 +25,21 @@ const refreshCookieName = "ai_refresh"
 // refreshCookiePath ограничивает область действия cookie: она уходит только
 // на эндпоинты обновления и выхода, а не на каждый запрос к API.
 const refreshCookiePath = "/api/v1/auth"
+
+// ShouldSecureCookies решает, ставить ли флаг Secure на cookie сессии.
+//
+// На голом HTTP Secure-cookie браузер отбрасывает → нет ai_csrf → 403 на
+// модерации и других CSRF-защищённых мутациях. Поэтому Secure включаем
+// только для https:// публичного URL (или принудительно через COOKIE_SECURE).
+func ShouldSecureCookies(publicURL string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("COOKIE_SECURE"))) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(publicURL)), "https://")
+}
 
 // AuthHandler — обработчики аутентификации.
 type AuthHandler struct {

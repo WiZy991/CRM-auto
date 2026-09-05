@@ -194,7 +194,7 @@ func run() error {
 			Tokens:  tokens,
 			Revoker: revoker,
 		},
-		AuthHandler:         httpx.NewAuthHandler(authService, cfg.App.Env.IsProduction()),
+		AuthHandler:         httpx.NewAuthHandler(authService, httpx.ShouldSecureCookies(cfg.App.PublicURL)),
 		CarHandler:          httpx.NewCarHandler(catalogService, socialService),
 		RequestHandler:      httpx.NewRequestHandler(requestService),
 		DealHandler:         httpx.NewDealHandler(pipelineService, disk),
