@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       user,
-      isVerified: Boolean(user && (user.email_verified || user.phone_verified)),
+      isVerified: Boolean(user?.email_verified),
       hasRole: (...roles: readonly Role[]) => Boolean(user && roles.includes(user.role)),
       login,
       register,

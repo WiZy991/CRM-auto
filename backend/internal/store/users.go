@@ -330,7 +330,6 @@ func (u *Users) MarkVerified(ctx context.Context, userID uuid.UUID, channel doma
 			WHERE id = $1
 			  AND status = 'pending'
 			  AND email_verified_at IS NOT NULL
-			  AND phone_verified_at IS NOT NULL
 			RETURNING `+userColumns, userID)
 
 		rec, err := scanUser(row)

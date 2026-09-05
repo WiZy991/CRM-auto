@@ -63,7 +63,7 @@ func (a *Admin) Users(ctx context.Context, filter UserFilter) ([]UserRow, int, e
 		where = append(where, fmt.Sprintf("users.status = ANY(%s::user_status[])", builder.add(filter.Statuses)))
 	}
 	if filter.UnverifiedOnly {
-		where = append(where, "(users.email_verified_at IS NULL OR users.phone_verified_at IS NULL)")
+		where = append(where, "users.email_verified_at IS NULL")
 	}
 	if filter.Search != "" {
 		// Поиск идёт по имени, почте и телефону сразу: администратор

@@ -157,9 +157,9 @@ export function CabinetLayout() {
         </header>
 
         <main className="w-full min-w-0 flex-1 px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-6 lg:px-8 lg:py-7 lg:pb-8">
-          {user && !user.email_verified && !user.phone_verified && (
+          {user && !user.email_verified && (
             <p className="mb-5 rounded-[var(--radius-sheet)] border border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 py-3 text-sm">
-              Подтвердите почту или телефон в{' '}
+              Подтвердите почту в{' '}
               <Link to="/app/profile" className="text-[var(--link)] underline underline-offset-2">
                 профиле
               </Link>

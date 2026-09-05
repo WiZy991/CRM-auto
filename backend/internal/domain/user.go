@@ -151,10 +151,12 @@ type User struct {
 func (u *User) EmailVerified() bool { return u.EmailVerifiedAt != nil }
 
 // PhoneVerified сообщает, подтверждён ли телефон.
+// Поле остаётся в модели/API, но гейты платформы на него не опираются
+// (SMS-провайдер не подключён).
 func (u *User) PhoneVerified() bool { return u.PhoneVerifiedAt != nil }
 
-// FullyVerified — оба контакта подтверждены, как требует ТЗ.
-func (u *User) FullyVerified() bool { return u.EmailVerified() && u.PhoneVerified() }
+// FullyVerified — достаточно подтверждённой почты (без SMS).
+func (u *User) FullyVerified() bool { return u.EmailVerified() }
 
 // IsLocked сообщает, действует ли временная блокировка входа.
 func (u *User) IsLocked(now time.Time) bool {
@@ -171,6 +173,12 @@ const (
 
 func (c VerifyChannel) Valid() bool {
 	return c == ChannelEmail || c == ChannelPhone
+}
+
+// Supported сообщает, можно ли сейчас подтверждать канал.
+// Телефон по SMS отключён: платный провайдер не подключён.
+func (c VerifyChannel) Supported() bool {
+	return c == ChannelEmail
 }
 
 // LockoutDuration рассчитывает срок блокировки входа по числу неудач.

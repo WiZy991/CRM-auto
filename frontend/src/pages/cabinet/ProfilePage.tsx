@@ -5,7 +5,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { authApi, dealersApi, errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
-import { Badge, Button, CheckField, DataTable, PageHeader, SelectField, TextAreaField, TextField, useToast } from '@/ui';
+import { Badge, Button, CheckField, DataTable, PageHeader, TextAreaField, TextField, useToast } from '@/ui';
 
 export function ProfilePage() {
   const { user, applyUser, logout, hasRole } = useAuth();
@@ -94,10 +94,10 @@ export function ProfilePage() {
       <section className="panel grid gap-3 p-5 sm:grid-cols-2">
         <Field label="Роль" value={user?.role_title ?? ''} />
         <Field label="Почта" value={user?.email ?? ''} extra={user?.email_verified ? 'подтверждена' : 'не подтверждена'} />
-        <Field label="Телефон" value={user?.phone ?? ''} extra={user?.phone_verified ? 'подтверждён' : 'не подтверждён'} />
+        <Field label="Телефон" value={user?.phone ?? ''} />
       </section>
 
-      {user && (!user.email_verified || !user.phone_verified) && <VerifyContacts />}
+      {user && !user.email_verified && <VerifyContacts />}
 
       <section>
         <h2 className="mb-4 text-sm font-medium">Персональные данные</h2>
@@ -225,33 +225,29 @@ export function ProfilePage() {
 }
 
 function VerifyContacts() {
-  const { applyUser, reload } = useAuth();
   const toast = useToast();
-  const [channel, setChannel] = useState<'email' | 'phone'>('email');
   const [code, setCode] = useState('');
 
   const send = useMutation({
-    mutationFn: () => authApi.sendCode(channel),
-    onSuccess: () => toast.success('Код отправлен', 'Если почта/SMS не настроены, код в логе API.'),
+    mutationFn: () => authApi.sendCode('email'),
+    onSuccess: () => toast.success('Код отправлен на почту'),
     onError: (error) => toast.error(errorMessage(error)),
   });
 
   const confirm = useMutation({
-    mutationFn: () => authApi.verify(channel, code.trim()),
-    onSuccess: async (data) => {
-      applyUser(data.user);
+    mutationFn: () => authApi.verify('email', code.trim()),
+    onSuccess: () => {
       setCode('');
-      toast.success('Контакт подтверждён');
-      await reload();
+      toast.success('Почта подтверждена');
     },
     onError: (error) => toast.error(errorMessage(error)),
   });
 
   return (
     <section>
-      <h2 className="mb-4 text-sm font-medium">Подтверждение контактов</h2>
+      <h2 className="mb-4 text-sm font-medium">Подтверждение почты</h2>
       <p className="mb-4 max-w-xl text-xs text-[var(--text-muted)]">
-        Почта и телефон нужны для заявок и объявлений. В локальной среде коды пишутся в лог API.
+        Код придёт на ваш email. Подтверждение телефона по SMS не используется.
       </p>
       <form
         className="flex max-w-md flex-col gap-3"
@@ -260,22 +256,13 @@ function VerifyContacts() {
           if (code.trim()) confirm.mutate();
         }}
       >
-        <SelectField
-          label="Канал"
-          value={channel}
-          onChange={(event) => setChannel(event.target.value as 'email' | 'phone')}
-          options={[
-            { value: 'email', title: 'Электронная почта' },
-            { value: 'phone', title: 'Телефон' },
-          ]}
-        />
         <div className="flex gap-2">
           <Button type="button" size="sm" onClick={() => send.mutate()} loading={send.isPending}>
-            Выслать код
+            Выслать код на почту
           </Button>
         </div>
         <TextField
-          label="Код"
+          label="Код из письма"
           value={code}
           onChange={(event) => setCode(event.target.value)}
           inputMode="numeric"

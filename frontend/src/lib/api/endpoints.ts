@@ -7,7 +7,7 @@
  */
 
 import { api, request } from './client';
-import { setSession } from './session';
+import { getSession, readCsrfCookie, setSession } from './session';
 import type {
   AdminOverview,
   AdminUserRow,
@@ -56,11 +56,12 @@ import type {
 } from './types';
 
 function storeAuth(data: AuthResponse): AuthResponse {
+  const prev = getSession();
   setSession({
     user: data.user,
     accessToken: data.access_token,
     accessExpiresAt: Date.parse(data.access_expires_at),
-    csrfToken: data.csrf_token,
+    csrfToken: data.csrf_token || prev?.csrfToken || readCsrfCookie(),
   });
   return data;
 }
@@ -123,14 +124,10 @@ export const authApi = {
     return api.post<{ status: string; channel: string }>('/auth/verify/resend', { channel });
   },
 
-  verify(
-    channel: 'email' | 'phone',
-    code: string,
-  ): Promise<{ user: CurrentUser; refresh_needed: boolean }> {
-    return api.post<{ user: CurrentUser; refresh_needed: boolean }>('/auth/verify', {
-      channel,
-      code,
-    });
+  async verify(channel: 'email' | 'phone', code: string): Promise<AuthResponse> {
+    // После confirm сервер сразу отдаёт access с обновлёнными флагами —
+    // отдельный /refresh здесь не нужен (и раньше мог разлогинить при сбое).
+    return storeAuth(await api.post<AuthResponse>('/auth/verify', { channel, code }));
   },
 
   changePassword(oldPassword: string, newPassword: string): Promise<{ status: string }> {

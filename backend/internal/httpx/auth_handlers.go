@@ -369,11 +369,24 @@ func (h *AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Признаки подтверждения записаны в access-токене, поэтому после
-	// подтверждения клиенту нужно обновить токен — сообщаем об этом явно.
-	JSON(w, http.StatusOK, map[string]any{
-		"user":           toUserResponse(user),
-		"refresh_needed": true,
+	// Новый access сразу с обновлёнными ev/pv — без отдельного /refresh,
+	// который при сбое гасил сессию на клиенте сразу после успешного confirm.
+	tokens, err := h.auth.ReissueAccess(r.Context(), actor.UserID, actor.SessionID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	csrfToken := ""
+	if cookie, err := r.Cookie(CSRFCookieName); err == nil {
+		csrfToken = cookie.Value
+	}
+
+	JSON(w, http.StatusOK, authResponse{
+		User:            toUserResponse(user),
+		AccessToken:     tokens.AccessToken,
+		AccessExpiresAt: tokens.AccessExpiresAt,
+		CSRFToken:       csrfToken,
 	})
 }
 

@@ -125,11 +125,12 @@ func RequireRole(roles ...domain.Role) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireVerified требует подтверждённых контактов.
+// RequireVerified требует подтверждённой почты.
 //
 // Применяется к действиям, порождающим обязательства: создание заявки,
 // публикация объявления, переписка. Просмотр каталога подтверждения не
 // требует — иначе платформа теряет посетителей на пустом месте.
+// SMS-подтверждение телефона отключено (платный провайдер не подключён).
 func RequireVerified(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor := ActorFrom(r.Context())
@@ -142,14 +143,6 @@ func RequireVerified(next http.Handler) http.Handler {
 				Status:  http.StatusForbidden,
 				Code:    apierr.CodeEmailNotVerified,
 				Message: "Подтвердите адрес электронной почты, чтобы продолжить",
-			})
-			return
-		}
-		if !actor.PhoneVerified {
-			Error(w, r, &apierr.Error{
-				Status:  http.StatusForbidden,
-				Code:    apierr.CodePhoneNotVerified,
-				Message: "Подтвердите номер телефона, чтобы продолжить",
 			})
 			return
 		}

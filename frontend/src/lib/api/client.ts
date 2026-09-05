@@ -154,7 +154,11 @@ export async function refreshSession(): Promise<boolean> {
       });
 
       if (!response.ok) {
-        setSession(null);
+        // Не гасим живую сессию на сбое refresh (CSRF/сеть/гонка):
+        // иначе успешные действия вроде confirm почты заканчивались выходом.
+        if (!getSession() || accessTokenExpired()) {
+          setSession(null);
+        }
         return false;
       }
 

@@ -194,13 +194,9 @@ func (a *Auth) Register(ctx context.Context, input RegisterInput, meta RequestMe
 	if !a.skipVerify {
 		// Коды отправляются после создания записи и вне транзакции: ошибка
 		// отправки письма не должна откатывать регистрацию, пользователь
-		// сможет запросить код повторно.
+		// сможет запросить код повторно. SMS не шлём — провайдер не подключён.
 		if err := a.sendCode(ctx, record, domain.ChannelEmail, meta); err != nil {
 			a.log.ErrorContext(ctx, "не удалось отправить код на email",
-				slog.String("error", err.Error()))
-		}
-		if err := a.sendCode(ctx, record, domain.ChannelPhone, meta); err != nil {
-			a.log.ErrorContext(ctx, "не удалось отправить код по SMS",
 				slog.String("error", err.Error()))
 		}
 	}
@@ -580,6 +576,9 @@ func (a *Auth) SendVerificationCode(ctx context.Context, userID uuid.UUID, chann
 	if !channel.Valid() {
 		return apierr.BadRequest("Неизвестный канал подтверждения")
 	}
+	if !channel.Supported() {
+		return apierr.BadRequest("Подтверждение телефона по SMS отключено. Достаточно подтвердить почту")
+	}
 
 	record, err := a.users.ByID(ctx, userID)
 	if err != nil {
@@ -588,9 +587,6 @@ func (a *Auth) SendVerificationCode(ctx context.Context, userID uuid.UUID, chann
 
 	if channel == domain.ChannelEmail && record.EmailVerified() {
 		return apierr.Conflict("Адрес электронной почты уже подтверждён")
-	}
-	if channel == domain.ChannelPhone && record.PhoneVerified() {
-		return apierr.Conflict("Номер телефона уже подтверждён")
 	}
 
 	// Пауза между отправками: без неё кнопка «отправить снова» превращается
@@ -673,6 +669,9 @@ func (a *Auth) ConfirmVerificationCode(
 	if !channel.Valid() {
 		return nil, apierr.BadRequest("Неизвестный канал подтверждения")
 	}
+	if !channel.Supported() {
+		return nil, apierr.BadRequest("Подтверждение телефона по SMS отключено. Достаточно подтвердить почту")
+	}
 
 	code = strings.TrimSpace(code)
 	if len(code) < 4 || len(code) > 10 {
@@ -725,6 +724,34 @@ func (a *Auth) ConfirmVerificationCode(
 
 	user := record.User
 	return &user, nil
+}
+
+// ReissueAccess выдаёт новый access-токен с актуальными claims для той же сессии.
+// Нужен после подтверждения почты/телефона: иначе в JWT останутся старые
+// флаги verified, а лишний refresh ради обновления claims часто сбрасывает
+// клиента в «гость» при сбое CSRF/гонки ротации.
+func (a *Auth) ReissueAccess(ctx context.Context, userID, sessionID uuid.UUID) (*TokenPair, error) {
+	record, err := a.users.ByID(ctx, userID)
+	if err != nil {
+		return nil, apierr.Internal(err)
+	}
+	if !record.Status.CanSignIn() {
+		return nil, apierr.Forbidden("Доступ к учётной записи приостановлен")
+	}
+
+	access, accessExpires, err := a.tokens.IssueAccess(
+		record.ID, sessionID, record.Role.String(),
+		record.EmailVerified(), record.PhoneVerified())
+	if err != nil {
+		return nil, apierr.Internal(err)
+	}
+
+	return &TokenPair{
+		AccessToken:     access,
+		AccessExpiresAt: accessExpires,
+		SessionID:       sessionID,
+		UserID:          record.ID,
+	}, nil
 }
 
 // hashVerificationCode хеширует код вместе с идентификатором пользователя.

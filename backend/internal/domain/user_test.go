@@ -69,13 +69,8 @@ func TestUserVerificationState(t *testing.T) {
 	}
 
 	user.EmailVerifiedAt = &now
-	if user.FullyVerified() {
-		t.Error("подтверждения только email недостаточно")
-	}
-
-	user.PhoneVerifiedAt = &now
 	if !user.FullyVerified() {
-		t.Error("при подтверждённых email и телефоне ожидается полное подтверждение")
+		t.Error("подтверждённой почты достаточно для полного доступа")
 	}
 }
 
