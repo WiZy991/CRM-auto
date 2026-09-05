@@ -9,13 +9,21 @@ export function AnalyticsLayout() {
   const reportsOpen = location.pathname.includes('/analytics/reports');
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <PageHeader
         kicker={hasRole('dealer') ? 'Дилер' : 'Кабинет'}
         title="Аналитика"
-        description="Сводка по воронке, рынкам и рекламе. Отдельные таблицы и выгрузка в CSV — во вкладке «Отчёты»."
+        description={
+          reportsOpen
+            ? 'Таблицы по сделкам, воронке и рекламе. Из любого отчёта можно выгрузить CSV.'
+            : 'Главные цифры по воронке. Подробные таблицы и CSV — во вкладке «Отчёты».'
+        }
       />
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Разделы аналитики">
+      <div
+        className="flex gap-1 border-b border-[var(--border-hairline)]"
+        role="tablist"
+        aria-label="Разделы аналитики"
+      >
         <NavLink
           to="/app/analytics"
           end
@@ -41,9 +49,9 @@ export function AnalyticsLayout() {
 
 function tabClass(active: boolean) {
   return cn(
-    'inline-flex h-8 items-center justify-center box-border rounded-[var(--radius-sheet)] px-3 text-xs font-medium leading-none',
+    'relative -mb-px inline-flex h-10 items-center px-4 text-sm font-medium',
     active
-      ? 'bg-[var(--accent)] text-white border border-transparent'
-      : 'bg-[var(--surface-raised)] text-[var(--text-primary)] border border-[var(--border-hairline)] hover:bg-[var(--surface-sunken)]',
+      ? 'text-[var(--text-primary)] after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-[var(--accent)]'
+      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
   );
 }

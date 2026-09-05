@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 
 import { dealersApi, dealsApi, errorMessage } from '@/lib/api';
-import type { CountBucket, DealReview, PipelineSummary } from '@/lib/api';
+import type { CountBucket, DealReview, PipelineSummary, StageStat } from '@/lib/api';
 import { formatMonth, formatNumber, formatPercent, formatRubMinor } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
 import { stageBoardTitle, stageIndexLabel } from '@/lib/status';
-import { BarChart, Button, EmptyState, FunnelStrip, PageGuide, Spinner, TextField, useToast } from '@/ui';
+import { BarChart, Button, EmptyState, Spinner, TextField, useToast } from '@/ui';
 
 export function AnalyticsPage() {
   const summary = useQuery({
@@ -33,45 +33,68 @@ export function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <PageGuide
-        items={[
-          { title: 'Сводка', text: 'Воронка, выручка, рынки, заявки и реклама на одном экране.' },
-          { title: 'Отчёты', text: 'Вкладка справа: таблицы по каждому разрезу и выгрузка в CSV.' },
-          { title: 'Карточка', text: 'Из отчёта по сделкам можно сразу открыть нужную воронку.' },
-        ]}
-      />
       {summary.isPending && <Spinner className="text-[var(--accent)]" />}
       {summary.isError && (
         <EmptyState title="Не удалось загрузить сводку" description={errorMessage(summary.error)} />
       )}
       {stats && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-            <Kpi label="В работе" value={formatNumber(stats.open_count)} />
-            <Kpi label="Выдано" value={formatNumber(stats.won_count)} />
-            <Kpi label="Сорвано" value={formatNumber(stats.lost_count)} />
-            <Kpi label="Конверсия" value={formatPercent(stats.conversion)} />
-            <Kpi label="Выручка" value={formatRubMinor(stats.won_amount_rub_minor)} />
-            <Kpi label="В воронке" value={formatRubMinor(openAmount)} />
-            <Kpi label="Цикл, дни" value={stats.won_count === 0 ? '—' : stats.avg_cycle_days.toFixed(1)} />
-            <Kpi label="Зависли" value={formatNumber(staleCount)} />
-          </div>
+          <nav className="flex flex-wrap gap-2" aria-label="Быстрый доступ к отчётам">
+            <JumpLink to="/app/analytics/reports/won" label="Выданные" value={formatNumber(stats.won_count)} />
+            <JumpLink to="/app/analytics/reports/lost" label="Отказы" value={formatNumber(stats.lost_count)} />
+            <JumpLink to="/app/analytics/reports/stale" label="Зависли" value={formatNumber(staleCount)} />
+            <JumpLink to="/app/analytics/reports/pipeline" label="В работе" value={formatNumber(stats.open_count)} />
+            <Link
+              to="/app/analytics/reports"
+              className="inline-flex h-9 items-center rounded-[var(--radius-sheet)] border border-[var(--border-hairline)] px-3 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] hover:text-[var(--text-primary)]"
+            >
+              Все отчёты
+            </Link>
+          </nav>
 
-          <FunnelStrip
-            items={stats.stages.map((item) => ({
-              stage: item.stage,
-              title: item.title,
-              count: item.count,
-            }))}
-          />
+          <section aria-label="Ключевые показатели">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <HeroKpi
+                label="Выручка"
+                value={formatRubMinor(stats.won_amount_rub_minor)}
+                hint="По выданным сделкам"
+                to="/app/analytics/reports/revenue"
+              />
+              <HeroKpi
+                label="В работе"
+                value={formatNumber(stats.open_count)}
+                hint={formatRubMinor(openAmount)}
+                to="/app/analytics/reports/pipeline"
+              />
+              <HeroKpi
+                label="Выдано"
+                value={formatNumber(stats.won_count)}
+                hint={`конверсия ${formatPercent(stats.conversion)}`}
+                to="/app/analytics/reports/won"
+              />
+              <HeroKpi
+                label="Цикл"
+                value={stats.won_count === 0 ? '—' : `${stats.avg_cycle_days.toFixed(1)} дн.`}
+                hint="От открытия до выдачи"
+                to="/app/analytics/reports/cycle"
+              />
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[var(--border-hairline)] pt-3 sm:grid-cols-4">
+              <MiniStat label="Сорвано" value={formatNumber(stats.lost_count)} />
+              <MiniStat label="В воронке" value={formatRubMinor(openAmount)} />
+              <MiniStat label="Зависли" value={formatNumber(staleCount)} />
+              <MiniStat label="Конверсия" value={formatPercent(stats.conversion)} />
+            </dl>
+          </section>
+
+          <section>
+            <SectionHead title="Воронка" to="/app/analytics/reports/funnel" link="Подробнее" />
+            <FunnelBoard stages={stats.stages} />
+          </section>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <section>
-              <SectionHead
-                title="Выручка по месяцам"
-                to="/app/analytics/reports/revenue"
-                link="Отчёт"
-              />
+            <section className="panel p-4">
+              <SectionHead title="Выручка по месяцам" to="/app/analytics/reports/revenue" link="Отчёт" />
               {months.length === 0 ? (
                 <EmptyState title="Выдач за год нет" description="Сумма считается по сделкам со статусом «выдана»." />
               ) : (
@@ -84,12 +107,8 @@ export function AnalyticsPage() {
                 />
               )}
             </section>
-            <section>
-              <SectionHead
-                title="Новые сделки"
-                to="/app/analytics/reports/created"
-                link="Отчёт"
-              />
+            <section className="panel p-4">
+              <SectionHead title="Новые сделки" to="/app/analytics/reports/created" link="Отчёт" />
               {created.length === 0 ? (
                 <EmptyState title="Открытых сделок за год нет" description="График считает карточки по дате создания." />
               ) : (
@@ -104,54 +123,51 @@ export function AnalyticsPage() {
             </section>
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            <section>
-              <SectionHead title="Китай и Япония" to="/app/analytics/reports/markets" link="Отчёт" />
-              {origin.length === 0 ? (
-                <EmptyState title="Сделок нет" description="Рынок берётся из лота в карточке сделки." />
-              ) : (
-                <OriginTable items={origin} />
-              )}
-            </section>
-            <section>
-              <SectionHead title="Срок на этапе" to="/app/analytics/reports/cycle" link="Отчёт" />
-              <StageTable stats={stats} />
-            </section>
-          </div>
+          <section>
+            <SectionHead title="Китай и Япония" to="/app/analytics/reports/markets" link="Отчёт" />
+            {origin.length === 0 ? (
+              <EmptyState title="Сделок нет" description="Рынок берётся из лота в карточке сделки." />
+            ) : (
+              <OriginCards items={origin} />
+            )}
+          </section>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <BucketCard
-              title="Заявки"
-              to="/app/analytics/reports/requests"
-              items={stats.requests_by_status ?? []}
-            />
-            <BucketCard
-              title="Объявления"
-              to="/app/analytics/reports/listings"
-              items={stats.listings_by_status ?? []}
-            />
-            <div className="panel px-4 py-4">
-              <SectionHead title="Реклама" to="/app/analytics/reports/ads" link="Отчёт" />
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-[var(--text-muted)]">Баннеров</dt>
-                  <dd className="numeric mt-1 text-lg font-semibold">{formatNumber(ads?.count ?? 0)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--text-muted)]">CTR</dt>
-                  <dd className="numeric mt-1 text-lg font-semibold">{formatPercent(ads?.ctr ?? 0)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--text-muted)]">Показы</dt>
-                  <dd className="numeric mt-1">{formatNumber(ads?.impressions ?? 0)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--text-muted)]">Клики</dt>
-                  <dd className="numeric mt-1">{formatNumber(ads?.clicks ?? 0)}</dd>
-                </div>
-              </dl>
+          <section>
+            <h2 className="mb-3 text-sm font-medium">Заявки, лоты и реклама</h2>
+            <div className="grid gap-3 lg:grid-cols-3">
+              <BucketCard
+                title="Заявки"
+                to="/app/analytics/reports/requests"
+                items={stats.requests_by_status ?? []}
+              />
+              <BucketCard
+                title="Объявления"
+                to="/app/analytics/reports/listings"
+                items={stats.listings_by_status ?? []}
+              />
+              <div className="panel px-4 py-4">
+                <SectionHead title="Реклама" to="/app/analytics/reports/ads" link="Отчёт" />
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Баннеров</dt>
+                    <dd className="numeric mt-1 text-lg font-semibold">{formatNumber(ads?.count ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">CTR</dt>
+                    <dd className="numeric mt-1 text-lg font-semibold">{formatPercent(ads?.ctr ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Показы</dt>
+                    <dd className="numeric mt-1">{formatNumber(ads?.impressions ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--text-muted)]">Клики</dt>
+                    <dd className="numeric mt-1">{formatNumber(ads?.clicks ?? 0)}</dd>
+                  </div>
+                </dl>
+              </div>
             </div>
-          </div>
+          </section>
 
           <DealerReviews items={reviews.data?.items ?? []} />
         </>
@@ -217,6 +233,47 @@ export function DealerReviews({ items }: { items: DealReview[] }) {
   );
 }
 
+function JumpLink({ to, label, value }: { to: string; label: string; value: string }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex h-9 items-center gap-2 rounded-[var(--radius-sheet)] border border-[var(--border-hairline)] bg-[var(--surface)] px-3 text-xs hover:bg-[var(--surface-sunken)]"
+    >
+      <span className="text-[var(--text-secondary)]">{label}</span>
+      <span className="numeric font-semibold text-[var(--text-primary)]">{value}</span>
+    </Link>
+  );
+}
+
+function HeroKpi({
+  label,
+  value,
+  hint,
+  to,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  to: string;
+}) {
+  return (
+    <Link to={to} className="panel block px-4 py-4 transition-colors hover:bg-[var(--surface-sunken)]">
+      <p className="text-sm text-[var(--text-muted)]">{label}</p>
+      <p className="numeric mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{value}</p>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">{hint}</p>
+    </Link>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 sm:block">
+      <dt className="text-xs text-[var(--text-muted)]">{label}</dt>
+      <dd className="numeric text-sm font-medium sm:mt-0.5">{value}</dd>
+    </div>
+  );
+}
+
 function SectionHead({ title, to, link }: { title: string; to: string; link: string }) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -228,63 +285,66 @@ function SectionHead({ title, to, link }: { title: string; to: string; link: str
   );
 }
 
-function OriginTable({ items }: { items: PipelineSummary['by_origin'] }) {
+function FunnelBoard({ stages }: { stages: readonly StageStat[] }) {
+  const max = Math.max(...stages.map((item) => item.count), 1);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="panel w-full text-sm">
-        <thead className="bg-[var(--surface-sunken)] text-2xs tracking-[0.08em] text-[var(--text-muted)] uppercase">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">Рынок</th>
-            <th className="numeric px-3 py-2 text-right font-medium">В работе</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Выдано</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Сорвано</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Выручка</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.origin || 'none'} className="border-t border-[var(--border-hairline)]">
-              <td className="px-3 py-2">{item.title}</td>
-              <td className="numeric px-3 py-2 text-right">{formatNumber(item.open)}</td>
-              <td className="numeric px-3 py-2 text-right">{formatNumber(item.won)}</td>
-              <td className="numeric px-3 py-2 text-right">{formatNumber(item.lost)}</td>
-              <td className="numeric px-3 py-2 text-right">{formatRubMinor(item.won_amount_rub_minor)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ol className="panel divide-y divide-[var(--border-hairline)]">
+      {stages.map((item, index) => {
+        const width = item.count <= 0 ? 0 : Math.max(6, (item.count / max) * 100);
+        return (
+          <li key={item.stage} className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">
+                <span className="numeric text-[var(--text-muted)]">{stageIndexLabel(index + 1)}</span>{' '}
+                {stageBoardTitle(item.stage, item.title)}
+              </p>
+              <p className="numeric text-sm">
+                <span className="font-semibold">{formatNumber(item.count)}</span>
+                <span className="text-[var(--text-muted)]">
+                  {' '}
+                  · {item.count === 0 ? '—' : `${item.avg_days_on_stage.toFixed(1)} дн.`}
+                  {item.stale_count > 0 ? ` · зависло ${formatNumber(item.stale_count)}` : ''}
+                </span>
+              </p>
+            </div>
+            <div className="mt-2 h-1.5 bg-[var(--surface-sunken)]">
+              <div
+                className={item.count > 0 ? 'h-full bg-[var(--accent)]' : 'h-full'}
+                style={{ width: `${width}%` }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-function StageTable({ stats }: { stats: PipelineSummary }) {
+function OriginCards({ items }: { items: PipelineSummary['by_origin'] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="panel w-full text-sm">
-        <thead className="bg-[var(--surface-sunken)] text-2xs tracking-[0.08em] text-[var(--text-muted)] uppercase">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">Этап</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Сделок</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Зависли</th>
-            <th className="numeric px-3 py-2 text-right font-medium">Дней, ср.</th>
-          </tr>
-        </thead>
-        <tbody>
-          {stats.stages.map((item, index) => (
-            <tr key={item.stage} className="border-t border-[var(--border-hairline)]">
-              <td className="px-3 py-2">
-                <span className="numeric text-[var(--text-muted)]">{stageIndexLabel(index + 1)}</span>{' '}
-                {stageBoardTitle(item.stage, item.title)}
-              </td>
-              <td className="numeric px-3 py-2 text-right">{item.count}</td>
-              <td className="numeric px-3 py-2 text-right">{item.stale_count}</td>
-              <td className="numeric px-3 py-2 text-right">
-                {item.count === 0 ? '—' : item.avg_days_on_stage.toFixed(1)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {items.map((item) => (
+        <article key={item.origin || 'none'} className="panel px-4 py-4">
+          <h3 className="text-sm font-semibold">{item.title}</h3>
+          <p className="numeric mt-3 text-2xl font-semibold">{formatRubMinor(item.won_amount_rub_minor)}</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">выручка по выдачам</p>
+          <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-[var(--border-hairline)] pt-3 text-center">
+            <div>
+              <dt className="text-2xs text-[var(--text-muted)]">В работе</dt>
+              <dd className="numeric mt-1 text-sm font-medium">{formatNumber(item.open)}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs text-[var(--text-muted)]">Выдано</dt>
+              <dd className="numeric mt-1 text-sm font-medium">{formatNumber(item.won)}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs text-[var(--text-muted)]">Сорвано</dt>
+              <dd className="numeric mt-1 text-sm font-medium">{formatNumber(item.lost)}</dd>
+            </div>
+          </dl>
+        </article>
+      ))}
     </div>
   );
 }
@@ -307,15 +367,6 @@ function BucketCard({ title, to, items }: { title: string; to: string; items: Co
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="panel px-4 py-4">
-      <p className="text-sm text-[var(--text-muted)]">{label}</p>
-      <p className="numeric mt-2 text-xl font-semibold sm:text-2xl">{value}</p>
     </div>
   );
 }
