@@ -140,7 +140,8 @@ services:
       resources:
         limits:
           memory: 512m
-          cpus: "1.5"
+          # Beget VPS часто с 1 vCPU — лимит не выше числа ядер хоста.
+          cpus: "1.0"
 
   worker:
     profiles: ["full"]
