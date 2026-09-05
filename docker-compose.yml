@@ -182,12 +182,23 @@ services:
     image: nginx:1.29-alpine
     container_name: autoimport-gateway
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/nginx/gateway-entrypoint.sh"]
+    environment:
+      TLS_DOMAIN: ${TLS_DOMAIN:-xn--c1akmgcfiqd.xn--p1ai}
     ports:
+      # Прод: 80 и 443. Локально full-профиль можно оставить 8081/8443.
       - "${NGINX_HTTP_PORT:-8081}:80"
+      - "${NGINX_HTTPS_PORT:-8443}:443"
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/gateway-entrypoint.sh:/etc/nginx/gateway-entrypoint.sh:ro
       - ./frontend/dist:/srv/www:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+      - gateway-certs:/etc/nginx/certs
+    tmpfs:
+      - /etc/nginx/generated:mode=0755
     depends_on:
       - api
     security_opt:
@@ -197,6 +208,20 @@ services:
         limits:
           memory: 192m
 
+  # Выпуск/продление: deploy/enable-https.sh и deploy/ssl-renew.sh
+  # (профиль certs — не стартует вместе с full)
+  certbot:
+    profiles: ["certs"]
+    image: certbot/certbot:v4.0.0
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: ["certbot"]
+    command: ["certificates"]
+
 volumes:
   postgres-data:
   redis-data:
+  certbot-www:
+  certbot-certs:
+  gateway-certs:

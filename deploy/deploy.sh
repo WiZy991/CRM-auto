@@ -15,4 +15,9 @@ docker compose --profile full up -d --build
 docker compose --profile full run --rm api /app/migrate up
 docker compose --profile full up -d --force-recreate gateway
 
-echo "OK: $(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1/healthz || true)"
+code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1/healthz || true)"
+echo "OK http healthz: ${code}"
+if command -v curl >/dev/null; then
+  tls="$(curl -skS -o /dev/null -w '%{http_code}' https://127.0.0.1/healthz || true)"
+  echo "OK https healthz: ${tls}"
+fi

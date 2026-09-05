@@ -66,9 +66,17 @@
 - Физический доступ к серверу Postgres / Redis.
 - Социальная инженерия и фишинг пароля пользователя.
 
+## TLS (HTTPS)
+
+На VPS сертификат Let's Encrypt выпускается скриптом `deploy/enable-https.sh`
+(нужны DNS на сервер, `CERTBOT_EMAIL`, порты 80/443). Продление —
+`deploy/ssl-renew.sh` (cron раз в месяц). После выпуска в `.env` должны быть
+`https://` в `APP_PUBLIC_URL`, `CORS_ALLOWED_ORIGINS` и `STORAGE_PUBLIC_BASE_URL`.
+
 ## Что проверять перед продом
 
 - `make check` (`gofmt`, `go vet`, `go test`, `govulncheck`, `npm audit`)
 - Тесты IDOR: чужая сделка → 404, не 403
+- HTTPS: замок в браузере, `curl -fsS https://домен/healthz`
 - Cloudflare (или аналог) включён, origin принимает только его адреса
 - `APP_ENV=production`, `RATELIMIT_ENABLED=true`, SMTP включён
