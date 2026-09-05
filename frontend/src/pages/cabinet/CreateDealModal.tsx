@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ export function CreateDealModal({
 }) {
   const toast = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -83,6 +84,8 @@ export function CreateDealModal({
       });
     },
     onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['deals'] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dealSummary });
       toast.success('Сделка создана');
       onClose();
       reset();

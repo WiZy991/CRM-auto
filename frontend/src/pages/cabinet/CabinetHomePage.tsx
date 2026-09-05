@@ -147,6 +147,10 @@ function DealerHome() {
   const deals = useQuery({
     queryKey: queryKeys.deals({ outcome: 'open', limit: 200 }),
     queryFn: ({ signal }) => dealsApi.list({ outcome: 'open', limit: 200 }, signal),
+    // После создания сделки и возврата на воронку список должен подтянуться,
+    // а не жить минуту на устаревшем кеше.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const move = useMutation({
