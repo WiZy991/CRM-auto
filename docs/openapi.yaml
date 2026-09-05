@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Auto Import CRM
+  version: 0.2.0
+  description: |
+    REST `/api/v1`. Ошибки в конверте `{ "error": { "code", "message", "details" } }`.
+    Мутации можно повторять с заголовком `Idempotency-Key` (8–128 символов).
+    Персональные поля (паспорт, адрес) шифруются AES-256-GCM на приложении.
+servers:
+  - url: /api/v1
+paths:
+  /healthz:
+    get:
+      summary: Liveness
+      responses:
+        '200': { description: OK }
+  /readyz:
+    get: { summary: Readiness (Postgres) }
+  /metrics:
+    get: { summary: Prometheus }
+  /auth/register:
+    post: { summary: Регистрация client/dealer/seller }
+  /auth/login:
+    post: { summary: Вход }
+  /auth/refresh:
+    post: { summary: Ротация refresh cookie }
+  /auth/logout:
+    post: { summary: Выход текущей сессии }
+  /auth/me:
+    get: { summary: Профиль, включая расшифрованные паспорт и адрес владельца }
+  /auth/profile:
+    patch: { summary: Имя, паспорт, адрес. Паспорт и адрес шифруются }
+  /auth/delete:
+    post: { summary: Обезличивание учётки после проверки пароля }
+  /auth/password:
+    post: { summary: Смена пароля, отзыв всех сессий }
+  /cars:
+    get: { summary: Каталог, курсор, фильтр favorites=true }
+    post: { summary: Создать лот (дилер) }
+  /cars/dictionaries:
+    get: { summary: Марки, типы кузова, сортировки }
+  /dealers:
+    get: { summary: Публичный список импортёров }
+  /dealers/me:
+    get: { summary: Профиль текущего дилера }
+    put: { summary: Сохранить карточку импортёра }
+  /dealers/{slug}:
+    get: { summary: Публичная карточка дилера }
+  /dealers/{slug}/cars:
+    get: { summary: Лоты дилера }
+  /requests:
+    post: { summary: Заявка клиента }
+  /requests/my:
+    get: { summary: Заявки клиента }
+  /dealer/requests:
+    get: { summary: Заявки дилера }
+  /dealer/requests/pool:
+    get: { summary: Свободный пул }
+  /deals:
+    get: { summary: Список сделок }
+  /deals/summary:
+    get: { summary: Воронка, конверсия, выручка по месяцам }
+  /analytics:
+    get: { summary: То же, что /deals/summary }
+  /deals/{id}:
+    get: { summary: Карточка, история, задачи, документы }
+  /deals/{id}/stage:
+    post: { summary: Переход этапа }
+  /deals/{id}/review:
+    post: { summary: Отзыв после выдачи }
+  /sellers:
+    get: { summary: База поставщиков (только авторизованный) }
+  /banners:
+    get: { summary: Активные баннеры по placement }
+  /uploads/images:
+    post: { summary: Загрузка фото, magic bytes, перекодирование JPEG }
+  /admin/overview:
+    get: { summary: Сводка админки }
+  /admin/cars:
+    get: { summary: Очередь модерации объявлений }
+  /admin/cars/{id}/moderate:
+    post: { summary: Одобрить или вернуть в черновик }
+  /admin/banners:
+    get: { summary: Баннеры на модерации }
+  /admin/users:
+    get: { summary: Пользователи }
+  /auth/precheck:
+    get: { summary: Нужна ли капча перед входом }
+  /auth/sessions:
+    get: { summary: Список сессий }
+  /auth/sessions/{id}:
+    delete: { summary: Отозвать сессию }
+  /auth/logout-all:
+    post: { summary: Выход из всех сессий }
+  /meta/stages:
+    get: { summary: Справочник семи этапов воронки }
+  /cars/{id}:
+    get: { summary: Карточка лота }
+    put: { summary: Изменить лот (владелец) }
+    delete: { summary: Архивация лота }
+  /cars/{id}/status:
+    patch: { summary: Смена статуса лота, в SQL с dealer_id }
+  /cars/{id}/favorite:
+    put: { summary: В избранное }
+    delete: { summary: Убрать из избранного }
+  /requests/{id}:
+    get: { summary: Заявка участника, чужой UUID → 404 }
+  /requests/{id}/close:
+    post: { summary: Клиент закрывает заявку }
+  /dealer/requests/{id}/claim:
+    post: { summary: Взять заявку из пула }
+  /dealer/requests/{id}/reply:
+    post: { summary: Ответ дилера }
+  /dealer/requests/{id}/reject:
+    post: { summary: Отклонить заявку }
+  /deals:
+    post: { summary: Создать сделку из заявки или клиента }
+  /deals/{id}/messages:
+    get: { summary: Лента переписки }
+    post: { summary: Сообщение, INSERT только участнику }
+  /deals/{id}/close:
+    post: { summary: Закрыть сделку }
+  /deals/{id}/tasks:
+    post: { summary: Задача, INSERT с проверкой dealer_id }
+  /deals/{id}/tasks/{taskID}/toggle:
+    post: { summary: Отметить задачу }
+  /notifications:
+    get: { summary: Уведомления }
+  /notifications/unread:
+    get: { summary: Счётчик непрочитанных }
+  /notifications/read:
+    post: { summary: Отметить прочитанными }
+  /sellers/{id}:
+    get: { summary: Карточка поставщика }
+    put: { summary: Изменить поставщика }
+  /admin/users/{id}/status:
+    patch: { summary: Активация, блокировка. pending→active подтверждает контакты }
+  /admin/security-events:
+    get: { summary: Журнал охраны }
+  /dealer/banners:
+    get: { summary: Баннеры дилера }
+    post: { summary: Создать баннер }

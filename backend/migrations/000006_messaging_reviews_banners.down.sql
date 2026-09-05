@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS banners;
+DROP TABLE IF EXISTS reviews;
+DROP TABLE IF EXISTS deal_messages;

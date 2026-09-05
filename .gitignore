@@ -1,0 +1,40 @@
+# --- Секреты и локальная конфигурация ---
+.env
+.env.local
+*.pem
+*.key
+secrets/
+
+# --- Go ---
+/backend/bin/
+/backend/tmp/
+*.exe
+*.test
+*.out
+coverage.txt
+
+# --- Node / frontend ---
+node_modules/
+/frontend/dist/
+/frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# Playwright
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/blob-report/
+
+# --- Данные и артефакты ---
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/backups/*
+!/backups/.gitkeep
+/var/
+
+# --- IDE и ОС ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

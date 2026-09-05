@@ -1,0 +1,38 @@
+# Единые переводы строк в репозитории.
+#
+# Разработка идёт на Windows, а сборка и запуск — в Linux-контейнерах.
+# Без этого файла Go-исходники попадают в репозиторий с CRLF, gofmt считает
+# их неотформатированными, а shell-скрипты в контейнере не запускаются
+# из-за \r в строке shebang.
+
+* text=auto eol=lf
+
+*.go         text eol=lf
+*.sql        text eol=lf
+*.sh         text eol=lf
+*.ts         text eol=lf
+*.tsx        text eol=lf
+*.js         text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.md         text eol=lf
+*.conf       text eol=lf
+*.inc        text eol=lf
+Makefile     text eol=lf
+Dockerfile   text eol=lf
+.env.example text eol=lf
+
+# Скрипты PowerShell остаются с CRLF: это родной формат для Windows.
+*.ps1        text eol=crlf
+
+# Бинарные файлы не трогаем.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ico  binary
+*.pdf  binary

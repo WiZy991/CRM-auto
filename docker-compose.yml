@@ -1,0 +1,198 @@
+name: autoimport-crm
+
+# Профили:
+#   (по умолчанию)  — только инфраструктура: PostgreSQL, Redis, Mailpit.
+#                     Go-бэкенд и Vite-фронт запускаются локально.
+#   full            — дополнительно собирает API, воркер и nginx-шлюз.
+#
+#   docker compose up -d                 # инфраструктура для разработки
+#   docker compose --profile full up -d  # вся система за nginx
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: autoimport-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-autoimport}
+      APP_DB_USER: ${POSTGRES_USER:-autoimport_app}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      APP_DB_MIGRATOR_USER: ${POSTGRES_MIGRATOR_USER:-autoimport_migrator}
+      APP_DB_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}
+      # Ускоряет инициализацию и не влияет на безопасность: том локальный.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      # Наружу не публикуем: только на localhost хоста.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - "postgres"
+      # Приложение работает под ролью с минимальными правами; тяжёлые запросы
+      # обрываются по таймауту, чтобы один отчёт не занял весь пул.
+      - "-c"
+      - "statement_timeout=15000"
+      - "-c"
+      - "idle_in_transaction_session_timeout=30000"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "log_min_duration_statement=500"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-autoimport}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  redis:
+    image: redis:8-alpine
+    container_name: autoimport-redis
+    restart: unless-stopped
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "256mb"
+      # Ключи rate-limit и кеша при переполнении вытесняются по LRU,
+      # но данные сессий имеют TTL и переживают штатную работу.
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 320m
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: autoimport-mailpit
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  api:
+    profiles: ["full"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autoimport-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_ADDR: redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      HTTP_HOST: 0.0.0.0
+      # Ограничение памяти рантайма Go ниже лимита контейнера:
+      # сборщик мусора работает агрессивнее и процесс не убивается OOM-killer.
+      GOMEMLIMIT: 400MiB
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./storage/uploads:/app/storage/uploads
+    # Порт наружу не публикуется — только через nginx.
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.5"
+
+  worker:
+    profiles: ["full"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autoimport-worker
+    restart: unless-stopped
+    command: ["/app/worker"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_ADDR: redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      GOMEMLIMIT: 200MiB
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  gateway:
+    profiles: ["full"]
+    image: nginx:1.29-alpine
+    container_name: autoimport-gateway
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-8081}:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./frontend/dist:/srv/www:ro
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+
+volumes:
+  postgres-data:
+  redis-data:

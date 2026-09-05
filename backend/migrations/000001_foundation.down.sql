@@ -1,0 +1,21 @@
+DROP FUNCTION IF EXISTS normalize_phone(text);
+DROP FUNCTION IF EXISTS set_updated_at();
+
+DROP TYPE IF EXISTS notification_kind;
+DROP TYPE IF EXISTS banner_status;
+DROP TYPE IF EXISTS banner_placement;
+DROP TYPE IF EXISTS document_kind;
+DROP TYPE IF EXISTS deal_outcome;
+DROP TYPE IF EXISTS deal_stage;
+DROP TYPE IF EXISTS request_status;
+DROP TYPE IF EXISTS seller_kind;
+DROP TYPE IF EXISTS currency_code;
+DROP TYPE IF EXISTS fuel_type;
+DROP TYPE IF EXISTS body_type;
+DROP TYPE IF EXISTS drivetrain;
+DROP TYPE IF EXISTS transmission;
+DROP TYPE IF EXISTS car_status;
+DROP TYPE IF EXISTS origin_country;
+DROP TYPE IF EXISTS verify_channel;
+DROP TYPE IF EXISTS user_status;
+DROP TYPE IF EXISTS user_role;
