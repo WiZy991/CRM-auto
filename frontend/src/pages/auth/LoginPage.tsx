@@ -37,7 +37,7 @@ export function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-10 md:py-16">
-      <BrandLogo className="mb-8" subtitle="авто из Китая и Японии" />
+      <BrandLogo className="mb-8" subtitle="Китай · Япония" />
       <p className="text-sm font-medium text-[var(--accent)]">Вход</p>
       <h1 className="mt-2 text-2xl font-semibold md:text-3xl">В кабинет</h1>
       <p className="mt-3 text-sm text-[var(--text-secondary)]">

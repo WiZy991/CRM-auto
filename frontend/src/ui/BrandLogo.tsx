@@ -15,7 +15,8 @@ type BrandLogoProps = {
 };
 
 /**
- * Логотип GoImport: знак (G + авто + стрелка) и слово.
+ * GoImport: кремовая G + оранжевая стрелка «Go» — dual-read буква/движение.
+ * В UI берём PNG-знак (оптика и антиалиасинг), не упрощённый клипарт.
  */
 export function BrandLogo({
   to = '/',
@@ -28,27 +29,27 @@ export function BrandLogo({
   const body = (
     <>
       <img
-        src="/brand/mark.svg"
+        src="/brand/mark.png"
         alt=""
-        width={32}
-        height={32}
-        className="size-8 shrink-0 rounded-[9px]"
+        width={36}
+        height={36}
+        className="size-9 shrink-0 rounded-[10px] object-cover shadow-[0_1px_0_rgb(20_18_14/0.2)]"
         decoding="async"
       />
       {!markOnly && (
         <span className="min-w-0">
           <span
             className={cn(
-              'block font-display text-[17px] font-semibold leading-none tracking-tight',
+              'block font-display text-[18px] font-semibold leading-none tracking-[-0.02em]',
               onDark ? 'text-[var(--nav-text)]' : 'text-[var(--text-primary)]',
             )}
           >
-            Go<span className="text-[var(--accent)]">Import</span>
+            <span className="text-[var(--accent)]">Go</span>Import
           </span>
           {subtitle ? (
             <span
               className={cn(
-                'mt-1 block truncate text-xs',
+                'mt-1 block truncate text-xs tracking-wide',
                 hideSubtitleOnMobile && 'hidden sm:block',
                 onDark ? 'text-[var(--nav-muted)]' : 'text-[var(--text-muted)]',
               )}
@@ -61,7 +62,7 @@ export function BrandLogo({
     </>
   );
 
-  const classes = cn('inline-flex min-w-0 items-center gap-2.5', className);
+  const classes = cn('inline-flex min-w-0 items-center gap-3', className);
 
   if (to == null) {
     return <span className={classes}>{body}</span>;

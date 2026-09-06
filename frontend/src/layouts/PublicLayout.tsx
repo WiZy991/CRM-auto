@@ -22,7 +22,7 @@ export function PublicLayout() {
         <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <BrandLogo
             className="min-w-0"
-            subtitle="авто из Китая и Японии"
+            subtitle="Китай · Япония"
             hideSubtitleOnMobile
           />
 
