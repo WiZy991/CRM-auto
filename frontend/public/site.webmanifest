@@ -1,0 +1,30 @@
+{
+  "name": "GoImport — импорт авто",
+  "short_name": "GoImport",
+  "description": "Подбор, выкуп и доставка автомобилей из Китая и Японии.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efece6",
+  "theme_color": "#c45c14",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

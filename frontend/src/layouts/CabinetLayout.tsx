@@ -7,7 +7,7 @@ import { notificationsApi } from '@/lib/api';
 import type { Role } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import { formatDateTime } from '@/lib/format';
-import { Button, Drawer, cn } from '@/ui';
+import { Button, BrandLogo, Drawer, cn } from '@/ui';
 
 interface NavItem {
   to: string;
@@ -117,12 +117,7 @@ export function CabinetLayout() {
   return (
     <div className="flex min-h-dvh bg-[var(--surface)]">
       <aside className="hidden w-64 shrink-0 flex-col bg-[var(--nav)] text-[var(--nav-text)] lg:flex">
-        <Link to="/" className="px-5 py-5">
-          <span className="block font-display text-[17px] font-semibold tracking-tight">
-            Импорт
-          </span>
-          <span className="mt-1 block text-xs text-[var(--nav-muted)]">Кабинет · Китай и Япония</span>
-        </Link>
+        <BrandLogo to="/" onDark className="px-5 py-5" subtitle="Кабинет · Китай и Япония" />
         <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 pb-4" aria-label="Кабинет">
           {groups.map((group) => (
             <div key={group.label}>
@@ -145,9 +140,7 @@ export function CabinetLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-2 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] px-4 pt-[env(safe-area-inset-top)] sm:px-6 lg:h-16 lg:px-8">
-          <Link to="/" className="font-display text-sm font-semibold lg:hidden">
-            Импорт
-          </Link>
+          <BrandLogo to="/" markOnly className="lg:hidden" />
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
             <NotificationBell />
             <Button variant="ghost" size="sm" onClick={() => void logout()}>

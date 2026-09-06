@@ -1,3 +1,4 @@
+export { BrandLogo } from './BrandLogo';
 export { Badge, originTitle, originTone } from './Badge';
 export type { BadgeTone } from './Badge';
 export { BannerSlot } from './BannerSlot';

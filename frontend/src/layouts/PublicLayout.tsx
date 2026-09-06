@@ -2,7 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useState } from 'react';
 
 import { useAuth } from '@/features/auth/auth-context';
-import { Button, Drawer, LinkButton, cn } from '@/ui';
+import { BrandLogo, Button, Drawer, LinkButton, cn } from '@/ui';
 
 const NAV = [
   { to: '/catalog', label: 'Каталог' },
@@ -20,12 +20,11 @@ export function PublicLayout() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-20 border-b border-[var(--border-hairline)] bg-[var(--surface-raised)] pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex min-w-0 items-baseline gap-2.5">
-            <span className="font-display text-[17px] font-semibold tracking-tight">Импорт</span>
-            <span className="hidden text-sm text-[var(--text-muted)] sm:inline">
-              авто из Китая и Японии
-            </span>
-          </Link>
+          <BrandLogo
+            className="min-w-0"
+            subtitle="авто из Китая и Японии"
+            hideSubtitleOnMobile
+          />
 
           <nav className="hidden items-center gap-5 md:flex" aria-label="Основное меню">
             {NAV.map((item) => (
