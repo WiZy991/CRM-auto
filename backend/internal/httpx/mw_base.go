@@ -346,7 +346,7 @@ func BodyLimit(maxBytes, uploadBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			limit := maxBytes
-			if strings.HasPrefix(r.URL.Path, "/api/v1/uploads") {
+			if isUploadPath(r.URL.Path) {
 				limit = uploadBytes
 			}
 			if r.ContentLength > 0 && r.ContentLength > limit {
@@ -359,4 +359,9 @@ func BodyLimit(maxBytes, uploadBytes int64) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isUploadPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/uploads") ||
+		strings.HasPrefix(path, "/api/v1/dealer/document-templates")
 }

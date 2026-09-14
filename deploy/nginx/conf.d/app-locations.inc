@@ -52,6 +52,17 @@ location ^~ /api/v1/uploads {
     include /etc/nginx/conf.d/proxy-common.inc;
 }
 
+# --- DOCX-шаблоны дилера (до 12 МБ) ---
+location ^~ /api/v1/dealer/document-templates {
+    limit_req zone=upload burst=10 nodelay;
+    client_max_body_size 12m;
+    client_body_timeout 60s;
+    proxy_request_buffering on;
+
+    proxy_pass http://api_backend;
+    include /etc/nginx/conf.d/proxy-common.inc;
+}
+
 # --- Остальное API ---
 location ^~ /api/ {
     limit_req zone=api burst=40 nodelay;
