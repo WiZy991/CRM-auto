@@ -2,7 +2,7 @@ import type { BannerPublic } from '@/lib/api';
 
 import { cn } from './cn';
 
-type BannerSlotVariant = 'editorial' | 'strip' | 'card';
+type BannerSlotVariant = 'editorial' | 'strip' | 'rail' | 'card';
 
 export function BannerSlot({
   banners,
@@ -12,6 +12,7 @@ export function BannerSlot({
 }: {
   banners: readonly BannerPublic[];
   compact?: boolean;
+  /** editorial — одна широкая полоса; strip — низкие 1–2; rail — узкая колонка; card — сетка карточек */
   variant?: BannerSlotVariant;
   className?: string;
 }) {
@@ -60,9 +61,9 @@ export function BannerSlot({
             key={banner.id}
             href={banner.href}
             rel="noopener noreferrer"
-            className="flex min-h-16 items-stretch overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
+            className="flex min-h-14 items-stretch overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
           >
-            <div className="w-24 shrink-0 bg-[var(--surface-sunken)] sm:w-32">
+            <div className="w-20 shrink-0 bg-[var(--surface-sunken)] sm:w-28">
               {banner.image_url ? (
                 <img src={banner.image_url} alt="" className="size-full object-cover" />
               ) : (
@@ -82,6 +83,37 @@ export function BannerSlot({
     );
   }
 
+  if (variant === 'rail') {
+    // Узкая колонка: максимум 2 баннера, картинка сверху — не раздувает страницу.
+    return (
+      <aside className={cn('flex flex-col gap-3', className)}>
+        {banners.slice(0, 2).map((banner) => (
+          <a
+            key={banner.id}
+            href={banner.href}
+            rel="noopener noreferrer"
+            className="block overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
+          >
+            <div className="aspect-[4/3] bg-[var(--surface-sunken)]">
+              {banner.image_url ? (
+                <img src={banner.image_url} alt="" className="size-full object-cover" />
+              ) : (
+                <div className="bg-hatch size-full" />
+              )}
+            </div>
+            <div className="space-y-1 p-3">
+              <p className="text-xs font-medium text-[var(--accent)]">{banner.cta_label}</p>
+              <p className="text-sm font-semibold leading-snug">{banner.title}</p>
+              {banner.subtitle ? (
+                <p className="line-clamp-2 text-xs text-[var(--text-secondary)]">{banner.subtitle}</p>
+              ) : null}
+            </div>
+          </a>
+        ))}
+      </aside>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -90,28 +122,28 @@ export function BannerSlot({
         className,
       )}
     >
-      {banners.map((banner) => (
+      {banners.slice(0, 2).map((banner) => (
         <a
           key={banner.id}
           href={banner.href}
           rel="noopener noreferrer"
           className={cn(
-            'grid overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)] md:grid-cols-[1.2fr_1fr]',
-            compact ? 'min-h-24' : 'min-h-28 md:min-h-36',
+            'grid overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)] md:grid-cols-[1fr_1.1fr]',
+            compact ? 'min-h-20' : 'min-h-24',
           )}
         >
-          <div className="bg-[var(--surface-sunken)]">
+          <div className="min-h-20 bg-[var(--surface-sunken)]">
             {banner.image_url ? (
               <img src={banner.image_url} alt="" className="size-full object-cover" />
             ) : (
               <div className="bg-hatch size-full" />
             )}
           </div>
-          <div className="flex flex-col justify-end p-4">
+          <div className="flex flex-col justify-end p-3">
             <p className="text-xs font-medium text-[var(--accent)]">{banner.cta_label}</p>
-            <p className="mt-1 text-base font-semibold">{banner.title}</p>
+            <p className="mt-1 text-sm font-semibold">{banner.title}</p>
             {banner.subtitle && (
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">{banner.subtitle}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-[var(--text-secondary)]">{banner.subtitle}</p>
             )}
           </div>
         </a>

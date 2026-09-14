@@ -213,7 +213,7 @@ func (b *Banners) Active(ctx context.Context, placement domain.BannerPlacement, 
 			  AND banners.placement IN ('home_strip', 'home_hero')
 			  AND banners.starts_at <= now()
 			  AND banners.ends_at > now()
-			ORDER BY banners.weight DESC, banners.id
+			ORDER BY banners.weight DESC, random()
 			LIMIT $1`, limit)
 	}
 	return b.query(ctx, `
@@ -222,7 +222,7 @@ func (b *Banners) Active(ctx context.Context, placement domain.BannerPlacement, 
 		  AND banners.placement = $1
 		  AND banners.starts_at <= now()
 		  AND banners.ends_at > now()
-		ORDER BY banners.weight DESC, banners.id
+		ORDER BY banners.weight DESC, random()
 		LIMIT $2`, placement, limit)
 }
 

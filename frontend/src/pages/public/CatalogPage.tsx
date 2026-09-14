@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 
 import { bannersApi, carsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
-import { BannerSlot, Button, Combobox, EmptyState, LotCard, SelectField, Spinner, TextField } from '@/ui';
+import { BannerSlot, Button, Combobox, EmptyState, LotCard, SelectField, Spinner, TextField, cn } from '@/ui';
 
 const SORTS = [
   { value: 'fresh', title: 'Сначала новые' },
@@ -57,7 +57,8 @@ export function CatalogPage() {
   });
   const sidebarBanner = useQuery({
     queryKey: queryKeys.bannersActive('catalog_sidebar'),
-    queryFn: ({ signal }) => bannersApi.active('catalog_sidebar', 2, signal),
+    // Слот один: ротация по весу на бэке. На экране максимум 1 баннер.
+    queryFn: ({ signal }) => bannersApi.active('catalog_sidebar', 1, signal),
   });
 
   const dictionaries = useQuery({
@@ -67,6 +68,7 @@ export function CatalogPage() {
 
   const items = catalog.data?.pages.flatMap((page) => page.items) ?? [];
   const total = catalog.data?.pages[0]?.total;
+  const hasSidebar = (sidebarBanner.data?.items.length ?? 0) > 0;
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6 lg:px-8">
@@ -75,7 +77,8 @@ export function CatalogPage() {
           <p className="text-sm font-medium text-[var(--accent)]">Каталог</p>
           <h1 className="text-2xl font-semibold md:text-3xl">Автомобили из Китая и Японии</h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-secondary)]">
-            Откройте карточку, оставьте заявку дилеру. Если лот забронирован — его уже ведут. Сделка с этапами появится в кабинете.
+            Откройте карточку, оставьте заявку дилеру. Если лот забронирован — его уже ведут. Сделка с
+            этапами появится в кабинете.
           </p>
         </div>
         {typeof total === 'number' && (
@@ -84,7 +87,7 @@ export function CatalogPage() {
       </header>
 
       {topBanner.data && topBanner.data.items.length > 0 && (
-        <BannerSlot className="mt-6" banners={topBanner.data.items} compact />
+        <BannerSlot className="mt-6" banners={topBanner.data.items} variant="strip" />
       )}
 
       <div className="mt-8 grid gap-3 md:grid-cols-4">
@@ -162,50 +165,59 @@ export function CatalogPage() {
         />
       </div>
 
-      {sidebarBanner.data && sidebarBanner.data.items.length > 0 ? (
-        <BannerSlot className="mt-6" banners={sidebarBanner.data.items} compact />
-      ) : null}
-
-      <div className="mt-8">
-        {catalog.isPending && (
-          <div className="flex justify-center py-16">
-            <Spinner size={28} className="text-[var(--accent)]" />
-          </div>
+      <div
+        className={cn(
+          'mt-8',
+          hasSidebar && 'lg:grid lg:grid-cols-[minmax(0,1fr)_220px] lg:items-start lg:gap-6',
         )}
-
-        {catalog.isError && (
-          <EmptyState
-            title="Каталог сейчас недоступен"
-            description="Сервер не ответил. Если база ещё не запущена, список будет пустым до подъёма Postgres."
-          />
-        )}
-
-        {catalog.data && items.length === 0 && (
-          <EmptyState
-            title="Нет объявлений по этим условиям"
-            description="Снимите фильтры или оставьте заявку на подбор — дилер подберёт лот вне каталога."
-          />
-        )}
-
-        {items.length > 0 && (
-          <>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {items.map((car) => (
-                <LotCard key={car.id} car={car} />
-              ))}
+      >
+        <div className="min-w-0">
+          {catalog.isPending && (
+            <div className="flex justify-center py-16">
+              <Spinner size={28} className="text-[var(--accent)]" />
             </div>
-            {catalog.hasNextPage && (
-              <div className="mt-8 flex justify-center">
-                <Button
-                  loading={catalog.isFetchingNextPage}
-                  onClick={() => void catalog.fetchNextPage()}
-                >
-                  Показать ещё
-                </Button>
+          )}
+
+          {catalog.isError && (
+            <EmptyState
+              title="Каталог сейчас недоступен"
+              description="Сервер не ответил. Если база ещё не запущена, список будет пустым до подъёма Postgres."
+            />
+          )}
+
+          {catalog.data && items.length === 0 && (
+            <EmptyState
+              title="Нет объявлений по этим условиям"
+              description="Снимите фильтры или оставьте заявку на подбор — дилер подберёт лот вне каталога."
+            />
+          )}
+
+          {items.length > 0 && (
+            <>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {items.map((car) => (
+                  <LotCard key={car.id} car={car} />
+                ))}
               </div>
-            )}
-          </>
-        )}
+              {catalog.hasNextPage && (
+                <div className="mt-8 flex justify-center">
+                  <Button
+                    loading={catalog.isFetchingNextPage}
+                    onClick={() => void catalog.fetchNextPage()}
+                  >
+                    Показать ещё
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {hasSidebar ? (
+          <div className="mt-6 lg:sticky lg:top-24 lg:mt-0">
+            <BannerSlot banners={sidebarBanner.data!.items} variant="rail" />
+          </div>
+        ) : null}
       </div>
     </div>
   );

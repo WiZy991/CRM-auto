@@ -157,7 +157,7 @@ export function CarPage() {
           )}
 
           {pageBanner.data && pageBanner.data.items.length > 0 ? (
-            <BannerSlot banners={pageBanner.data.items} compact />
+            <BannerSlot banners={pageBanner.data.items.slice(0, 1)} variant="rail" />
           ) : null}
         </aside>
       </div>
