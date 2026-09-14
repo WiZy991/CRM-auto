@@ -149,8 +149,12 @@ type RequestListItem struct {
 	ClientPhone string
 	DealerName  string
 	CarTitle    string
-	// HasDeal показывает, создана ли по заявке сделка.
+	// HasDeal показывает, создана ли по заявке сделка (для текущего дилера — своя).
 	HasDeal bool
+	// ActiveClaims — сколько дилеров сейчас ведут заявку (0..5).
+	ActiveClaims int
+	// MaxClaims — лимит слотов.
+	MaxClaims int
 }
 
 // List возвращает заявки по фильтру.
@@ -160,14 +164,25 @@ func (r *Requests) List(ctx context.Context, filter RequestFilter) ([]RequestLis
 
 	switch {
 	case filter.OpenPool:
-		// Общий пул: ещё никто не взял заявку в работу.
-		// Заявка по лоту раньше сразу писала dealer_id владельца объявления
-		// и пропадала из пула — из‑за этого дилер видел пустой список, хотя
-		// покупатель заявку отправил. Лоты тоже остаются в пуле, пока статус new.
-		where = append(where, "requests.status = 'new'")
-		where = append(where, "(requests.dealer_id IS NULL OR requests.car_id IS NOT NULL)")
+		// Пул: заявка не финальная и есть свободный слот (< 5 active claims).
+		where = append(where, "requests.status NOT IN ('converted', 'rejected', 'closed')")
+		where = append(where, `(
+			SELECT count(*) FROM request_claims c
+			WHERE c.request_id = requests.id AND c.status = 'active'
+		) < 5`)
+		if filter.DealerID != nil {
+			// Не показывать заявки, которые этот дилер уже взял.
+			where = append(where, fmt.Sprintf(`NOT EXISTS (
+				SELECT 1 FROM request_claims c
+				WHERE c.request_id = requests.id AND c.dealer_id = %s AND c.status = 'active'
+			)`, builder.add(*filter.DealerID)))
+		}
 	case filter.DealerID != nil:
-		where = append(where, "requests.dealer_id = "+builder.add(*filter.DealerID))
+		where = append(where, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM request_claims c
+			WHERE c.request_id = requests.id AND c.dealer_id = %s
+			  AND c.status IN ('active', 'converted')
+		)`, builder.add(*filter.DealerID)))
 	case filter.ClientID != nil:
 		where = append(where, "requests.client_id = "+builder.add(*filter.ClientID))
 	default:
@@ -197,7 +212,9 @@ func (r *Requests) List(ctx context.Context, filter RequestFilter) ([]RequestLis
 		       client.full_name, client.phone,
 		       COALESCE(dealer.full_name, ''),
 		       COALESCE(cars.title, ''),
-		       EXISTS (SELECT 1 FROM deals WHERE deals.request_id = requests.id)
+		       EXISTS (SELECT 1 FROM deals WHERE deals.request_id = requests.id),
+		       (SELECT count(*)::int FROM request_claims c
+		        WHERE c.request_id = requests.id AND c.status = 'active')
 		FROM requests
 		JOIN users AS client ON client.id = requests.client_id
 		LEFT JOIN users AS dealer ON dealer.id = requests.dealer_id
@@ -232,9 +249,11 @@ func (r *Requests) List(ctx context.Context, filter RequestFilter) ([]RequestLis
 			&req.CreatedAt, &req.UpdatedAt,
 			&item.ClientName, &item.ClientPhone,
 			&item.DealerName, &item.CarTitle, &item.HasDeal,
+			&item.ActiveClaims,
 		); err != nil {
 			return nil, 0, fmt.Errorf("разбор строки заявки: %w", err)
 		}
+		item.MaxClaims = MaxActiveClaimsPerRequest
 		items = append(items, item)
 	}
 	return items, total, rows.Err()
@@ -252,33 +271,16 @@ func (r *Requests) ByIDForParticipant(ctx context.Context, requestID, userID uui
 		WHERE requests.id = $1
 		  AND (requests.client_id = $2
 		       OR requests.dealer_id = $2
-		       OR ($3 AND requests.status = 'new'
-		           AND (requests.dealer_id IS NULL OR requests.car_id IS NOT NULL)))`,
+		       OR EXISTS (
+		            SELECT 1 FROM request_claims c
+		            WHERE c.request_id = requests.id AND c.dealer_id = $2
+		              AND c.status IN ('active', 'converted')
+		          )
+		       OR ($3 AND requests.status NOT IN ('rejected', 'closed')
+		           AND (SELECT count(*) FROM request_claims c
+		                WHERE c.request_id = requests.id AND c.status = 'active') < 5))`,
 		requestID, userID, isDealer))
 }
-
-// Claim закрепляет заявку из общего пула за дилером.
-//
-// Условие dealer_id IS NULL внутри UPDATE делает операцию безопасной при
-// одновременных попытках: второй дилер получит нулевое число изменённых
-// строк, а не перезапишет чужое закрепление.
-func (r *Requests) Claim(ctx context.Context, requestID, dealerID uuid.UUID) (*domain.Request, error) {
-	row := r.pool.QueryRow(ctx, `
-		UPDATE requests
-		SET dealer_id = $2, status = 'in_progress'
-		WHERE id = $1 AND status = 'new'
-		  AND (dealer_id IS NULL OR car_id IS NOT NULL)
-		RETURNING `+requestColumns, requestID, dealerID)
-
-	request, err := scanRequest(row)
-	if errors.Is(err, ErrNotFound) {
-		return nil, ErrAlreadyClaimed
-	}
-	return request, err
-}
-
-// ErrAlreadyClaimed — заявку уже взял другой дилер.
-var ErrAlreadyClaimed = errors.New("заявка уже закреплена за другим дилером")
 
 // Reply сохраняет ответ дилера.
 func (r *Requests) Reply(ctx context.Context, requestID, dealerID uuid.UUID, reply string) (*domain.Request, error) {
@@ -286,16 +288,30 @@ func (r *Requests) Reply(ctx context.Context, requestID, dealerID uuid.UUID, rep
 		UPDATE requests
 		SET dealer_reply = $3, replied_at = now(),
 		    status = CASE WHEN status IN ('new', 'in_progress') THEN 'answered'::request_status ELSE status END
-		WHERE id = $1 AND dealer_id = $2
+		WHERE id = $1
+		  AND status <> 'converted'
+		  AND EXISTS (
+		    SELECT 1 FROM request_claims c
+		    WHERE c.request_id = requests.id AND c.dealer_id = $2 AND c.status IN ('active', 'converted')
+		  )
 		RETURNING `+requestColumns, requestID, dealerID, reply))
 }
 
 // Reject отклоняет заявку.
 func (r *Requests) Reject(ctx context.Context, requestID, dealerID uuid.UUID, reason string) (*domain.Request, error) {
+	// Отказ дилера = освобождение своего слота, заявка в пуле остаётся.
+	_, err := r.pool.Exec(ctx, `
+		UPDATE request_claims
+		SET status = 'lost', updated_at = now()
+		WHERE request_id = $1 AND dealer_id = $2 AND status = 'active'`,
+		requestID, dealerID)
+	if err != nil {
+		return nil, err
+	}
 	return scanRequest(r.pool.QueryRow(ctx, `
 		UPDATE requests
-		SET status = 'rejected', rejected_reason = $3
-		WHERE id = $1 AND dealer_id = $2 AND status <> 'converted'
+		SET rejected_reason = $3
+		WHERE id = $1
 		RETURNING `+requestColumns, requestID, dealerID, reason))
 }
 

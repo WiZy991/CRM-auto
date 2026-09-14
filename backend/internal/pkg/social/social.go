@@ -20,6 +20,9 @@ var ErrNeedReauth = errors.New("нужно обновить ключ канал�
 // ErrSkipped — публиковать нечего или канал не лента (нет видео, нет чата).
 var ErrSkipped = errors.New("публикация пропущена")
 
+// ErrNeedsPartner — автопост ждёт partner credentials площадки в .env.
+var ErrNeedsPartner = errors.New("needs_partner")
+
 // Credentials — расшифрованные поля ключа. Пустые значения не сериализуются
 // в ответ API; наружу уходит только маска.
 type Credentials struct {
@@ -33,6 +36,9 @@ type Credentials struct {
 	APIKey            string `json:"api_key,omitempty"`
 	PageID            string `json:"page_id,omitempty"`
 	IGUserID          string `json:"ig_user_id,omitempty"`
+	ClientID          string `json:"client_id,omitempty"`
+	ClientSecret      string `json:"client_secret,omitempty"`
+	ProfileID         string `json:"profile_id,omitempty"`
 }
 
 // SecretMask показывает хвост токена, чтобы дилер узнал «тот ли ключ».

@@ -55,6 +55,7 @@ const NAV_BY_ROLE: Record<Role, readonly NavGroup[]> = {
         { to: '/app/cars', label: 'Объявления', short: 'Лоты', hint: 'Лоты в каталоге' },
         { to: '/app/banners', label: 'Реклама', hint: 'Баннеры на сайте' },
         { to: '/app/channels', label: 'Каналы', hint: 'Посты в соцсети' },
+        { to: '/app/document-templates', label: 'Шаблоны', hint: 'DOCX для сделок' },
       ],
     },
     {

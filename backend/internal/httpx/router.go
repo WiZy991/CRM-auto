@@ -226,6 +226,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 			requests.Get("/my", deps.RequestHandler.MyRequests)
 			requests.Get("/{id}", deps.RequestHandler.Get)
+			requests.Get("/{id}/claims", deps.RequestHandler.Claims)
 
 			// Заявку создаёт только клиент с подтверждённым контактом:
 			// дилеру нужен способ связи, а неподтверждённый телефон
@@ -240,6 +241,12 @@ func NewRouter(deps RouterDeps) http.Handler {
 				RequireRole(domain.RoleClient),
 				deps.Guard.RateLimitByUser(rules["mutation"]),
 			).Post("/{id}/close", deps.RequestHandler.Close)
+
+			requests.With(
+				RequireRole(domain.RoleClient),
+				requireVerified,
+				deps.Guard.RateLimitByUser(rules["mutation"]),
+			).Post("/{id}/refuse-dealer", deps.RequestHandler.RefuseDealer)
 		})
 
 		api.Get("/integrations/oauth/callback", deps.SocialHandler.OAuthCallback)
@@ -319,6 +326,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 				manage.Post("/{id}/documents", deps.DealHandler.AddDocument)
 				manage.Get("/{id}/documents/preview", deps.DealHandler.PreviewDocument)
 				manage.Post("/{id}/documents/generate", deps.DealHandler.GenerateDocuments)
+				manage.Post("/{id}/documents/from-template", deps.DealHandler.GenerateFromTemplate)
 			})
 		})
 
@@ -394,6 +402,19 @@ func NewRouter(deps RouterDeps) http.Handler {
 				mutate.Post("/{id}/submit", deps.BannerHandler.Submit)
 				mutate.Patch("/{id}/pause", deps.BannerHandler.SetPaused)
 				mutate.Delete("/{id}", deps.BannerHandler.Delete)
+			})
+		})
+
+		api.Route("/dealer/document-templates", func(templates chi.Router) {
+			templates.Use(RequireAuth, RequireRole(domain.RoleDealer, domain.RoleAdmin))
+			templates.Use(requireVerified)
+
+			templates.Get("/", deps.DealHandler.ListDocumentTemplates)
+			templates.Group(func(mutate chi.Router) {
+				mutate.Use(deps.Guard.RateLimitByUser(rules["upload"]))
+				mutate.Post("/", deps.DealHandler.UploadDocumentTemplate)
+				mutate.Put("/{id}", deps.DealHandler.UpdateDocumentTemplate)
+				mutate.Delete("/{id}", deps.DealHandler.DeleteDocumentTemplate)
 			})
 		})
 

@@ -22,7 +22,7 @@ func NewDeals(pool *Pool) *Deals { return &Deals{pool: pool} }
 
 const dealColumns = `
 	deals.id, deals.public_number,
-	deals.client_id, deals.dealer_id, deals.car_id, deals.seller_id,
+	deals.client_id, deals.dealer_id, deals.car_id, deals.seller_id, deals.request_id,
 	deals.stage, deals.outcome,
 	deals.title, deals.amount_minor, deals.currency, deals.amount_rub_minor, deals.paid_rub_minor,
 	deals.services_note, deals.destination_port, deals.shipping_tracking,
@@ -38,7 +38,7 @@ func scanDeal(row pgx.Row) (*domain.Deal, error) {
 	var deal domain.Deal
 	err := row.Scan(
 		&deal.ID, &deal.PublicNumber,
-		&deal.ClientID, &deal.DealerID, &deal.CarID, &deal.SellerID,
+		&deal.ClientID, &deal.DealerID, &deal.CarID, &deal.SellerID, &deal.RequestID,
 		&deal.Stage, &deal.Outcome,
 		&deal.Title, &deal.AmountMinor, &deal.Currency, &deal.AmountRubMinor, &deal.PaidRubMinor,
 		&deal.ServicesNote, &deal.DestinationPort, &deal.ShippingTracking,
@@ -114,9 +114,18 @@ func (d *Deals) Create(ctx context.Context, params CreateDealParams) (*domain.De
 		// как необработанную.
 		if params.RequestID != nil {
 			if _, err := tx.Exec(ctx, `
-				UPDATE requests SET status = 'converted', dealer_id = COALESCE(dealer_id, $2)
-				WHERE id = $1`, *params.RequestID, params.DealerID); err != nil {
-				return fmt.Errorf("отметка заявки как сконвертированной: %w", err)
+				UPDATE request_claims
+				SET status = 'converted', deal_id = $3, updated_at = now()
+				WHERE request_id = $1 AND dealer_id = $2`,
+				*params.RequestID, params.DealerID, deal.ID); err != nil {
+				return fmt.Errorf("отметка claim как сконвертированного: %w", err)
+			}
+			// Не закрываем заявку целиком: другие дилеры могут продолжать работу.
+			if _, err := tx.Exec(ctx, `
+				UPDATE requests SET dealer_id = COALESCE(dealer_id, $2)
+				WHERE id = $1 AND status NOT IN ('rejected', 'closed')`,
+				*params.RequestID, params.DealerID); err != nil {
+				return fmt.Errorf("обновление заявки: %w", err)
 			}
 		}
 
@@ -257,7 +266,7 @@ func (d *Deals) List(ctx context.Context, filter DealFilter, viewerID uuid.UUID)
 
 		if err := rows.Scan(
 			&deal.ID, &deal.PublicNumber,
-			&deal.ClientID, &deal.DealerID, &deal.CarID, &deal.SellerID,
+			&deal.ClientID, &deal.DealerID, &deal.CarID, &deal.SellerID, &deal.RequestID,
 			&deal.Stage, &deal.Outcome,
 			&deal.Title, &deal.AmountMinor, &deal.Currency, &deal.AmountRubMinor, &deal.PaidRubMinor,
 			&deal.ServicesNote, &deal.DestinationPort, &deal.ShippingTracking,
@@ -472,6 +481,16 @@ func (d *Deals) Close(ctx context.Context, params CloseParams) (*domain.Deal, er
 			params.DealID, currentStage, params.Outcome, params.ChangedBy,
 			truncate(params.LostReason, 1000)); err != nil {
 			return fmt.Errorf("запись истории закрытия: %w", err)
+		}
+
+		if params.Outcome == domain.OutcomeLost {
+			if _, err := tx.Exec(ctx, `
+				UPDATE request_claims
+				SET status = 'lost', updated_at = now()
+				WHERE deal_id = $1 AND status IN ('active', 'converted')`,
+				params.DealID); err != nil {
+				return fmt.Errorf("освобождение слота заявки: %w", err)
+			}
 		}
 
 		result = deal

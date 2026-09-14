@@ -25,11 +25,11 @@ const STEPS = [
 ] as const;
 
 export function HomePage() {
-  const hero = useQuery({
-    queryKey: queryKeys.bannersActive('home_hero'),
-    queryFn: ({ signal }) => bannersApi.active('home_hero', 1, signal),
+  const strip = useQuery({
+    queryKey: queryKeys.bannersActive('home_strip'),
+    queryFn: ({ signal }) => bannersApi.active('home_strip', 1, signal),
   });
-  const inline = useQuery({
+  const offers = useQuery({
     queryKey: queryKeys.bannersActive('home_inline'),
     queryFn: ({ signal }) => bannersApi.active('home_inline', 2, signal),
   });
@@ -47,9 +47,7 @@ export function HomePage() {
       <section className="border-b border-[var(--border-hairline)]">
         <div className="mx-auto grid w-full max-w-[1600px] gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr] md:py-20 lg:px-8">
           <div>
-            <p className="text-sm font-medium text-[var(--accent)]">
-              Китай · Япония · под ключ
-            </p>
+            <p className="text-sm font-medium text-[var(--accent)]">GoImport · Китай · Япония</p>
             <h1 className="mt-3 max-w-xl text-3xl leading-[1.15] font-semibold text-balance md:text-5xl">
               Автомобиль с аукциона — без сюрпризов на выдаче
             </h1>
@@ -68,9 +66,7 @@ export function HomePage() {
           </div>
 
           <aside className="panel p-6">
-            <p className="text-sm font-medium text-[var(--text-muted)]">
-              Сделка на виду
-            </p>
+            <p className="text-sm font-medium text-[var(--text-muted)]">Сделка на виду</p>
             <ul className="mt-4 space-y-3 text-sm">
               <li className="flex justify-between border-b border-[var(--border-hairline)] pb-3">
                 <span className="text-[var(--text-secondary)]">Этапов воронки</span>
@@ -94,26 +90,26 @@ export function HomePage() {
           <Link to="/catalog" className="panel px-5 py-6">
             <p className="text-sm font-medium text-[var(--accent)]">Покупатель</p>
             <p className="mt-2 text-base font-semibold">Выбрать машину</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Каталог, заявка дилеру, семь этапов до выдачи.</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Каталог, заявка дилеру, семь этапов до выдачи.
+            </p>
           </Link>
           <Link to="/register" className="panel px-5 py-6">
             <p className="text-sm font-medium text-[var(--accent)]">Дилер</p>
             <p className="mt-2 text-base font-semibold">Вести сделки</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Воронка, лоты, реклама и каналы в кабинете.</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Воронка, лоты, реклама и каналы в кабинете.
+            </p>
           </Link>
           <Link to="/register" className="panel px-5 py-6">
             <p className="text-sm font-medium text-[var(--accent)]">Поставщик</p>
             <p className="mt-2 text-base font-semibold">Попасть в справочник</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">Карточка завода или аукциона для дилеров.</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Карточка завода или аукциона для дилеров.
+            </p>
           </Link>
         </div>
       </section>
-
-      {hero.data && hero.data.items.length > 0 && (
-        <div className="mx-auto w-full max-w-[1600px] px-4 pt-8 sm:px-6 lg:px-8">
-          <BannerSlot banners={hero.data.items} />
-        </div>
-      )}
 
       <section className="mx-auto w-full max-w-[1600px] px-4 py-16 sm:px-6 lg:px-8">
         <h2 className="text-2xl font-semibold">Как проходит покупка</h2>
@@ -132,6 +128,10 @@ export function HomePage() {
           </Link>
         </p>
       </section>
+
+      {strip.data && strip.data.items.length > 0 && (
+        <BannerSlot banners={strip.data.items} variant="editorial" />
+      )}
 
       {lots.data && lots.data.items.length > 0 && (
         <section className="border-t border-[var(--border-hairline)]">
@@ -175,9 +175,7 @@ export function HomePage() {
               {dealers.data.items.map((dealer) => (
                 <li key={dealer.slug} className="panel p-5">
                   <Link to={`/dealers/${dealer.slug}`} className="block">
-                    <p className="text-sm text-[var(--text-muted)]">
-                      {dealerCityLabel(dealer.city)}
-                    </p>
+                    <p className="text-sm text-[var(--text-muted)]">{dealerCityLabel(dealer.city)}</p>
                     <h3 className="mt-2 text-lg font-semibold">{dealer.company_name}</h3>
                     <p className="numeric mt-3 text-xs text-[var(--text-muted)]">
                       {dealer.deals_won} выдач · {dealer.cars_active} лотов
@@ -190,10 +188,15 @@ export function HomePage() {
         </div>
       </section>
 
-      {inline.data && inline.data.items.length > 0 && (
-        <div className="mx-auto w-full max-w-[1600px] px-4 pb-16 sm:px-6 lg:px-8">
-          <BannerSlot banners={inline.data.items} compact />
-        </div>
+      {offers.data && offers.data.items.length > 0 && (
+        <section className="border-t border-[var(--border-hairline)]">
+          <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6 lg:px-8">
+            <p className="mb-3 text-xs font-medium tracking-wide text-[var(--text-muted)]">
+              Предложения дилеров
+            </p>
+            <BannerSlot banners={offers.data.items} variant="strip" />
+          </div>
+        </section>
       )}
     </div>
   );

@@ -36,11 +36,14 @@ import type {
   DealerForm,
   DealerProfile,
   DictionaryEntry,
+  DocumentField,
+  DocumentTemplate,
   Notification,
   NotificationPage,
   OffsetPage,
   PipelineSummary,
   PublicDealer,
+  RequestClaimItem,
   RequestListItem,
   Role,
   SecurityEventRow,
@@ -231,6 +234,44 @@ export const uploadsApi = {
   },
 };
 
+export const documentTemplatesApi = {
+  list(signal?: AbortSignal): Promise<{
+    items: DocumentTemplate[];
+    fields: DocumentField[];
+  }> {
+    return api.get<{ items: DocumentTemplate[]; fields: DocumentField[] }>(
+      '/dealer/document-templates',
+      undefined,
+      signal,
+    );
+  },
+
+  upload(input: {
+    file: File;
+    title: string;
+    kind?: string;
+    stage?: string;
+  }): Promise<{ template: DocumentTemplate }> {
+    const body = new FormData();
+    body.append('file', input.file);
+    body.append('title', input.title);
+    if (input.kind) body.append('kind', input.kind);
+    if (input.stage) body.append('stage', input.stage);
+    return request('/dealer/document-templates', { method: 'POST', body, timeoutMs: 60_000 });
+  },
+
+  update(
+    id: UUID,
+    input: { title: string; kind?: string; stage?: string; field_map: Record<string, string> },
+  ): Promise<{ template: DocumentTemplate }> {
+    return api.put<{ template: DocumentTemplate }>(`/dealer/document-templates/${id}`, input);
+  },
+
+  remove(id: UUID): Promise<{ status: string }> {
+    return api.delete<{ status: string }>(`/dealer/document-templates/${id}`);
+  },
+};
+
 export const dealsApi = {
   stages(signal?: AbortSignal): Promise<{ items: StageMeta[] }> {
     return api.get<{ items: StageMeta[] }>('/meta/stages', undefined, signal);
@@ -347,6 +388,16 @@ export const dealsApi = {
     );
   },
 
+  generateFromTemplate(
+    id: UUID,
+    input: { template_id: string; visible_to_client?: boolean },
+  ): Promise<{ document: DealDocument; warnings: string[] }> {
+    return api.post<{ document: DealDocument; warnings: string[] }>(
+      `/deals/${id}/documents/from-template`,
+      input,
+    );
+  },
+
   createTask(
     id: UUID,
     input: { title: string; description?: string; stage?: Stage; due_at?: string },
@@ -395,6 +446,14 @@ export const requestsApi = {
 
   close(id: UUID): Promise<{ status: string }> {
     return api.post<{ status: string }>(`/requests/${id}/close`);
+  },
+
+  claims(id: UUID, signal?: AbortSignal): Promise<{ items: RequestClaimItem[]; max_claims: number }> {
+    return api.get<{ items: RequestClaimItem[]; max_claims: number }>(`/requests/${id}/claims`, undefined, signal);
+  },
+
+  refuseDealer(id: UUID, dealerId: UUID): Promise<{ status: string }> {
+    return api.post<{ status: string }>(`/requests/${id}/refuse-dealer`, { dealer_id: dealerId });
   },
 
   claim(id: UUID): Promise<{ request: ClientRequest }> {
@@ -667,6 +726,9 @@ export const channelsApi = {
     phone_number_id?: string;
     business_account_id?: string;
     destination?: string;
+    client_id?: string;
+    client_secret?: string;
+    profile_id?: string;
     auto_post?: boolean;
     disconnect?: boolean;
   }): Promise<{ channel: SocialChannel }> {

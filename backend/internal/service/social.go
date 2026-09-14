@@ -69,6 +69,8 @@ func NewSocial(
 			domain.NetworkInstagram: pkgSocial.Instagram{},
 			domain.NetworkYouTube:   pkgSocial.YouTube{},
 			domain.NetworkRuTube:    pkgSocial.RuTube{},
+			domain.NetworkAvito:     pkgSocial.Avito{PartnerReady: cfg.AvitoPartnerReady()},
+			domain.NetworkDrom:      pkgSocial.Drom{PartnerReady: cfg.DromPartnerReady()},
 		},
 	}
 }
@@ -88,6 +90,8 @@ type ChannelView struct {
 	PhoneNumberID     string `json:"phone_number_id,omitempty"`
 	BusinessAccountID string `json:"business_account_id,omitempty"`
 	Destination       string `json:"destination,omitempty"`
+	ClientID          string `json:"client_id,omitempty"`
+	ProfileID         string `json:"profile_id,omitempty"`
 	PlatformReady     bool   `json:"platform_ready"`
 	PlatformHint      string `json:"platform_hint,omitempty"`
 	PublishHint       string `json:"publish_hint,omitempty"`
@@ -103,6 +107,9 @@ type ChannelPut struct {
 	PhoneNumberID     string
 	BusinessAccountID string
 	Destination       string
+	ClientID          string
+	ClientSecret      string
+	ProfileID         string
 	AutoPost          *bool
 	Disconnect        bool
 }
@@ -168,6 +175,16 @@ func (s *Social) emptyView(network domain.SocialNetwork) ChannelView {
 	case domain.NetworkWhatsApp:
 		view.PlatformReady = true
 		view.PublishHint = "WhatsApp — не лента. Лоты уходят сообщением в указанный чат или Channel."
+	case domain.NetworkAvito:
+		view.PlatformReady = true
+		if !s.cfg.AvitoPartnerReady() {
+			view.PlatformHint = "автопост Авито ждёт partner credentials площадки (AVITO_CLIENT_ID/SECRET)"
+		}
+	case domain.NetworkDrom:
+		view.PlatformReady = true
+		if !s.cfg.DromPartnerReady() {
+			view.PlatformHint = "автопост Дрома ждёт partner credentials площадки (DROM_API_KEY)"
+		}
 	}
 	return view
 }
@@ -180,6 +197,10 @@ func publishHint(network domain.SocialNetwork) string {
 		return "Автозагрузка ролика в этой версии не включена — только проверка ключа."
 	case domain.NetworkWhatsApp:
 		return "Автопост — сообщение в чат или Channel, не пост на стену."
+	case domain.NetworkAvito:
+		return "Сейчас: сохранение ключей и проверка полей. Автопост лота — после партнёрского доступа."
+	case domain.NetworkDrom:
+		return "Сейчас: сохранение ключей и проверка полей. Автопост лота — после партнёрского доступа."
 	default:
 		return ""
 	}
@@ -198,12 +219,14 @@ func (s *Social) viewFromRow(row store.SocialAccountRow) (ChannelView, error) {
 	if err != nil {
 		return ChannelView{}, err
 	}
-	view.TokenMask = pkgSocial.SecretMask(firstNonEmpty(creds.Token, creds.APIKey))
+	view.TokenMask = pkgSocial.SecretMask(firstNonEmpty(creds.Token, creds.APIKey, creds.ClientSecret))
 	view.ChatID = creds.ChatID
 	view.OwnerID = creds.OwnerID
 	view.PhoneNumberID = creds.PhoneNumberID
 	view.BusinessAccountID = creds.BusinessAccountID
 	view.Destination = creds.Destination
+	view.ClientID = creds.ClientID
+	view.ProfileID = firstNonEmpty(creds.ProfileID, creds.OwnerID)
 	return view, nil
 }
 
@@ -261,8 +284,23 @@ func (s *Social) SaveChannel(ctx context.Context, dealerID uuid.UUID, input Chan
 			creds.Token = k
 		}
 	}
+	if cid := strings.TrimSpace(input.ClientID); cid != "" {
+		creds.ClientID = cid
+	}
+	if cs := strings.TrimSpace(input.ClientSecret); cs != "" {
+		creds.ClientSecret = cs
+		if creds.Token == "" {
+			creds.Token = cs
+		}
+	}
+	if pid := strings.TrimSpace(input.ProfileID); pid != "" {
+		creds.ProfileID = pid
+	}
 	creds.ChatID = strings.TrimSpace(input.ChatID)
 	creds.OwnerID = strings.TrimSpace(input.OwnerID)
+	if creds.ProfileID == "" && creds.OwnerID != "" {
+		creds.ProfileID = creds.OwnerID
+	}
 	creds.PhoneNumberID = strings.TrimSpace(input.PhoneNumberID)
 	creds.BusinessAccountID = strings.TrimSpace(input.BusinessAccountID)
 	creds.Destination = strings.TrimSpace(input.Destination)
@@ -461,7 +499,7 @@ func (s *Social) processOne(ctx context.Context, item store.SocialOutboxRow) {
 	adapter := s.adapters[item.Network]
 	postID, pubErr := adapter.Publish(ctx, creds, listing)
 	if pubErr != nil {
-		if errors.Is(pubErr, pkgSocial.ErrSkipped) {
+		if errors.Is(pubErr, pkgSocial.ErrSkipped) || errors.Is(pubErr, pkgSocial.ErrNeedsPartner) {
 			_ = s.accounts.FinishOutbox(ctx, item.ID, "skipped", "", pubErr.Error())
 			return
 		}

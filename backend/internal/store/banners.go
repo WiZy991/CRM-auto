@@ -205,6 +205,17 @@ func (b *Banners) Active(ctx context.Context, placement domain.BannerPlacement, 
 	if limit <= 0 || limit > 20 {
 		limit = 5
 	}
+	// home_strip читает и устаревший home_hero — миграция без перезаписи строк.
+	if placement == domain.PlacementHomeStrip {
+		return b.query(ctx, `
+			SELECT `+bannerColumns+` FROM banners
+			WHERE banners.status = 'active'
+			  AND banners.placement IN ('home_strip', 'home_hero')
+			  AND banners.starts_at <= now()
+			  AND banners.ends_at > now()
+			ORDER BY banners.weight DESC, banners.id
+			LIMIT $1`, limit)
+	}
 	return b.query(ctx, `
 		SELECT `+bannerColumns+` FROM banners
 		WHERE banners.status = 'active'

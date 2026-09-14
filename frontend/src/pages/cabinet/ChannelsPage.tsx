@@ -32,6 +32,9 @@ interface Draft {
   phoneNumberId: string;
   businessAccountId: string;
   destination: string;
+  clientId: string;
+  clientSecret: string;
+  profileId: string;
   autoPost: boolean;
 }
 
@@ -44,6 +47,9 @@ function draftFrom(channel: SocialChannel): Draft {
     phoneNumberId: channel.phone_number_id ?? '',
     businessAccountId: channel.business_account_id ?? '',
     destination: channel.destination ?? '',
+    clientId: channel.client_id ?? '',
+    clientSecret: '',
+    profileId: channel.profile_id ?? '',
     autoPost: channel.auto_post,
   };
 }
@@ -140,6 +146,9 @@ function ChannelCard({
         network: channel.network,
         ...(draft.token ? { token: draft.token } : {}),
         ...(draft.apiKey ? { api_key: draft.apiKey } : {}),
+        ...(draft.clientId ? { client_id: draft.clientId } : {}),
+        ...(draft.clientSecret ? { client_secret: draft.clientSecret } : {}),
+        ...(draft.profileId ? { profile_id: draft.profileId } : {}),
         chat_id: draft.chatId,
         owner_id: draft.ownerId,
         phone_number_id: draft.phoneNumberId,
@@ -148,7 +157,7 @@ function ChannelCard({
         auto_post: draft.autoPost,
       }),
     onSuccess: () => {
-      onDraft({ token: '', apiKey: '' });
+      onDraft({ token: '', apiKey: '', clientSecret: '' });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dealerChannels });
       toast.success(`${channel.title}: ключ сохранён`);
     },
@@ -214,7 +223,10 @@ function ChannelCard({
       ) : null}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {channel.auth_kind === 'keys' && channel.network !== 'rutube' ? (
+        {channel.auth_kind === 'keys' &&
+        channel.network !== 'rutube' &&
+        channel.network !== 'avito' &&
+        channel.network !== 'drom' ? (
           <TextField
             label={channel.network === 'vk' ? 'Токен сообщества' : 'Токен'}
             type="password"
@@ -233,6 +245,49 @@ function ChannelCard({
             placeholder={channel.token_mask ? 'новый ключ, если меняете' : ''}
             onChange={(event) => onDraft({ apiKey: event.target.value, token: event.target.value })}
           />
+        ) : null}
+        {channel.network === 'avito' ? (
+          <>
+            <TextField
+              label="client_id"
+              value={draft.clientId}
+              onChange={(event) => onDraft({ clientId: event.target.value })}
+            />
+            <TextField
+              label="client_secret / user token"
+              type="password"
+              autoComplete="off"
+              value={draft.clientSecret || draft.token}
+              placeholder={channel.token_mask ? 'новый секрет, если меняете' : ''}
+              onChange={(event) =>
+                onDraft({ clientSecret: event.target.value, token: event.target.value })
+              }
+            />
+            <TextField
+              label="profile_id (необязательно)"
+              value={draft.profileId}
+              onChange={(event) => onDraft({ profileId: event.target.value })}
+            />
+          </>
+        ) : null}
+        {channel.network === 'drom' ? (
+          <>
+            <TextField
+              label="user token / api key"
+              type="password"
+              autoComplete="off"
+              value={draft.token || draft.apiKey}
+              placeholder={channel.token_mask ? 'новый ключ, если меняете' : ''}
+              onChange={(event) => onDraft({ token: event.target.value, apiKey: event.target.value })}
+            />
+            <TextField
+              label="profile_id"
+              value={draft.profileId || draft.ownerId}
+              onChange={(event) =>
+                onDraft({ profileId: event.target.value, ownerId: event.target.value })
+              }
+            />
+          </>
         ) : null}
         {channel.network === 'telegram' ? (
           <TextField

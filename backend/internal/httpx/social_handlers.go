@@ -49,6 +49,9 @@ func (h *SocialHandler) Save(w http.ResponseWriter, r *http.Request) {
 		PhoneNumberID     string `json:"phone_number_id"`
 		BusinessAccountID string `json:"business_account_id"`
 		Destination       string `json:"destination"`
+		ClientID          string `json:"client_id"`
+		ClientSecret      string `json:"client_secret"`
+		ProfileID         string `json:"profile_id"`
 		AutoPost          *bool  `json:"auto_post"`
 		Disconnect        bool   `json:"disconnect"`
 	}
@@ -72,6 +75,9 @@ func (h *SocialHandler) Save(w http.ResponseWriter, r *http.Request) {
 		PhoneNumberID:     req.PhoneNumberID,
 		BusinessAccountID: req.BusinessAccountID,
 		Destination:       req.Destination,
+		ClientID:          req.ClientID,
+		ClientSecret:      req.ClientSecret,
+		ProfileID:         req.ProfileID,
 		AutoPost:          req.AutoPost,
 		Disconnect:        req.Disconnect,
 	})

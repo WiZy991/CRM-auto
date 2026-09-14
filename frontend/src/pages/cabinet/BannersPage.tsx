@@ -28,25 +28,25 @@ const PLACES: readonly {
   hint: string;
 }[] = [
   {
-    id: 'home_hero',
+    id: 'home_strip',
     page: 'Главная',
     href: '/',
-    where: 'Сразу под шапкой',
-    hint: 'Первое, что видит гость сайта.',
+    where: 'Полоса после «как купить»',
+    hint: 'Один full-bleed баннер, без конкуренции с заголовком.',
   },
   {
     id: 'home_inline',
     page: 'Главная',
     href: '/',
-    where: 'В ленте лотов',
-    hint: 'Между блоками «как купить» и каталогом.',
+    where: 'Низ страницы',
+    hint: 'Тихая полоса «предложения дилеров» перед футером (1–2).',
   },
   {
     id: 'catalog_top',
     page: 'Каталог',
     href: '/catalog',
-    where: 'Над фильтрами',
-    hint: 'Видно, пока человек выбирает машину.',
+    where: 'Над сеткой лотов',
+    hint: 'Тонкая плашка над объявлениями.',
   },
   {
     id: 'catalog_sidebar',
@@ -77,7 +77,7 @@ export function BannersPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [preset, setPreset] = useState<BannerPlacement>('home_hero');
+  const [preset, setPreset] = useState<BannerPlacement>('home_strip');
 
   const mine = useQuery({
     queryKey: queryKeys.bannersMine,
@@ -129,7 +129,7 @@ export function BannersPage() {
         title="Баннеры"
         description="Картинка вашей компании на витрине: главная, каталог или карточка автомобиля. Гость кликает — уходит по вашей ссылке. Показы считаются сами."
         actions={
-          <Button size="sm" variant="primary" onClick={() => openCreate('home_hero')}>
+          <Button size="sm" variant="primary" onClick={() => openCreate('home_strip')}>
             Новый баннер
           </Button>
         }
@@ -330,14 +330,15 @@ function PlacementSketch({ id }: { id: BannerPlacement }) {
   return (
     <div className="flex aspect-[5/4] flex-col gap-1 border border-[var(--border-hairline)] bg-[var(--surface)] p-1.5">
       <div className="h-2 bg-[var(--surface-sunken)]" />
-      {id === 'home_hero' ? <div className={cn('h-7', mark('home_hero'))} /> : <div className="h-4 bg-[var(--surface-sunken)]" />}
-      {id === 'catalog_top' ? <div className={cn('h-4', mark('catalog_top'))} /> : null}
+      <div className="h-4 bg-[var(--surface-sunken)]" />
+      {id === 'catalog_top' ? <div className={cn('h-3', mark('catalog_top'))} /> : null}
       <div className="grid flex-1 grid-cols-3 gap-1">
         <div className="bg-[var(--surface-sunken)]" />
         <div className="bg-[var(--surface-sunken)]" />
         <div className="bg-[var(--surface-sunken)]" />
       </div>
-      {id === 'home_inline' ? <div className={cn('h-4', mark('home_inline'))} /> : null}
+      {id === 'home_strip' ? <div className={cn('h-5', mark('home_strip'))} /> : null}
+      {id === 'home_inline' ? <div className={cn('mt-auto h-3', mark('home_inline'))} /> : null}
     </div>
   );
 }
@@ -362,11 +363,11 @@ function BannerCreateModal({
   const starts = new Date().toISOString();
   const ends = new Date(Date.now() + 30 * 86400000).toISOString();
   const current = PLACES.find((item) => item.id === slot) ?? {
-    id: 'home_hero' as const,
+    id: 'home_strip' as const,
     page: 'Главная',
     href: '/',
-    where: 'Сразу под шапкой',
-    hint: 'Первое, что видит гость сайта.',
+    where: 'Полоса после «как купить»',
+    hint: 'Один full-bleed баннер.',
   };
 
   useEffect(() => {

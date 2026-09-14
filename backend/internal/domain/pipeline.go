@@ -238,6 +238,7 @@ type Deal struct {
 	DealerID uuid.UUID
 	CarID    *uuid.UUID
 	SellerID *uuid.UUID
+	RequestID *uuid.UUID
 
 	Stage   Stage
 	Outcome Outcome

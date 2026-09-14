@@ -47,7 +47,18 @@ func (d *Disk) SavePrivate(subdir, ext string, payload []byte, mime string) (*Sa
 	return &SavedFile{RelPath: rel, MimeType: mime, Bytes: len(payload)}, nil
 }
 
-// Resolve возвращает абсолютный путь к файлу сделки, если он лежит на диске.
+// Read читает ранее сохранённый файл по относительному ключу (private/…).
+func (d *Disk) Read(fileURL string) ([]byte, error) {
+	full, ok := d.Resolve(fileURL)
+	if !ok {
+		return nil, fmt.Errorf("файл не найден")
+	}
+	payload, err := os.ReadFile(full)
+	if err != nil {
+		return nil, fmt.Errorf("чтение файла: %w", err)
+	}
+	return payload, nil
+}
 //
 // Публичные картинки остаются по /uploads/…, закрытые документы — по
 // относительному private/…. Чужой префикс (http://) не резолвится.

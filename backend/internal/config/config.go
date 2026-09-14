@@ -225,6 +225,9 @@ type Social struct {
 	MetaAppSecret      string
 	GoogleClientID     string
 	GoogleClientSecret string
+	AvitoClientID      string
+	AvitoClientSecret  string
+	DromAPIKey         string
 	OAuthRedirectURI   string
 }
 
@@ -238,6 +241,14 @@ func (s Social) MetaReady() bool {
 
 func (s Social) GoogleReady() bool {
 	return s.GoogleClientID != "" && s.GoogleClientSecret != ""
+}
+
+func (s Social) AvitoPartnerReady() bool {
+	return s.AvitoClientID != "" && s.AvitoClientSecret != ""
+}
+
+func (s Social) DromPartnerReady() bool {
+	return s.DromAPIKey != ""
 }
 
 // Load читает конфигурацию из окружения.
@@ -346,6 +357,9 @@ func Load() (*Config, error) {
 			MetaAppSecret:      os.Getenv("META_APP_SECRET"),
 			GoogleClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			GoogleClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+			AvitoClientID:      os.Getenv("AVITO_CLIENT_ID"),
+			AvitoClientSecret:  os.Getenv("AVITO_CLIENT_SECRET"),
+			DromAPIKey:         os.Getenv("DROM_API_KEY"),
 		},
 	}
 

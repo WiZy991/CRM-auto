@@ -452,3 +452,71 @@ func (RuTube) Publish(_ context.Context, _ Credentials, listing Listing) (string
 	}
 	return "", fmt.Errorf("%w: загрузка на RuTube в этой версии не включена", ErrSkipped)
 }
+
+// Avito — каркас до partner credentials площадки. Без фейковых постов.
+type Avito struct {
+	PartnerReady bool
+}
+
+func (a Avito) Test(_ context.Context, creds Credentials) (string, error) {
+	clientID := strings.TrimSpace(creds.ClientID)
+	secret := strings.TrimSpace(firstCred(creds.ClientSecret, creds.Token))
+	profile := strings.TrimSpace(firstCred(creds.ProfileID, creds.OwnerID))
+	if clientID == "" && secret == "" {
+		return "", fmt.Errorf("укажите client_id и client_secret (или user token) Авито")
+	}
+	if clientID == "" {
+		return "", fmt.Errorf("укажите client_id приложения Авито")
+	}
+	if secret == "" {
+		return "", fmt.Errorf("укажите client_secret или user token Авито")
+	}
+	if !a.PartnerReady {
+		if profile != "" {
+			return profile, nil
+		}
+		return "avito-keys-ok", nil
+	}
+	// Реальный вызов API появится после модерации кабинета разработчика.
+	if profile != "" {
+		return profile, nil
+	}
+	return "avito-keys-ok", nil
+}
+
+func (a Avito) Publish(_ context.Context, _ Credentials, _ Listing) (string, error) {
+	return "", fmt.Errorf("%w: автопост в Авито появится после partner credentials площадки", ErrNeedsPartner)
+}
+
+// Drom — каркас до partner credentials. Без фейковых постов.
+type Drom struct {
+	PartnerReady bool
+}
+
+func (d Drom) Test(_ context.Context, creds Credentials) (string, error) {
+	token := strings.TrimSpace(firstCred(creds.Token, creds.APIKey, creds.ClientSecret))
+	profile := strings.TrimSpace(firstCred(creds.ProfileID, creds.OwnerID, creds.ClientID))
+	if token == "" {
+		return "", fmt.Errorf("укажите user token или api key Дрома")
+	}
+	if profile == "" {
+		return "", fmt.Errorf("укажите profile_id / id кабинета Дрома")
+	}
+	if !d.PartnerReady {
+		return profile, nil
+	}
+	return profile, nil
+}
+
+func (d Drom) Publish(_ context.Context, _ Credentials, _ Listing) (string, error) {
+	return "", fmt.Errorf("%w: автопост на Дром появится после partner credentials площадки", ErrNeedsPartner)
+}
+
+func firstCred(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}

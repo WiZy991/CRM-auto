@@ -2,11 +2,13 @@ package httpx
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/autoimport/crm/internal/domain"
+	"github.com/autoimport/crm/internal/pkg/apierr"
 	"github.com/autoimport/crm/internal/pkg/money"
 	"github.com/autoimport/crm/internal/service"
 	"github.com/autoimport/crm/internal/store"
@@ -65,11 +67,13 @@ type requestResponse struct {
 type requestListItemResponse struct {
 	requestResponse
 
-	ClientName  string `json:"client_name,omitempty"`
-	ClientPhone string `json:"client_phone,omitempty"`
-	DealerName  string `json:"dealer_name,omitempty"`
-	CarTitle    string `json:"car_title,omitempty"`
-	HasDeal     bool   `json:"has_deal"`
+	ClientName   string `json:"client_name,omitempty"`
+	ClientPhone  string `json:"client_phone,omitempty"`
+	DealerName   string `json:"dealer_name,omitempty"`
+	CarTitle     string `json:"car_title,omitempty"`
+	HasDeal      bool   `json:"has_deal"`
+	ActiveClaims int    `json:"active_claims"`
+	MaxClaims    int    `json:"max_claims"`
 }
 
 func toRequestResponse(request *domain.Request) requestResponse {
@@ -138,6 +142,8 @@ func toRequestListItem(item store.RequestListItem) requestListItemResponse {
 		DealerName:      item.DealerName,
 		CarTitle:        item.CarTitle,
 		HasDeal:         item.HasDeal,
+		ActiveClaims:    item.ActiveClaims,
+		MaxClaims:       item.MaxClaims,
 	}
 }
 
@@ -259,7 +265,8 @@ func (h *RequestHandler) OpenPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, total, err := h.requests.ListOpenPool(r.Context(), limit, offset)
+	actor := ActorFrom(r.Context())
+	items, total, err := h.requests.ListOpenPool(r.Context(), actor.UserID, limit, offset)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -380,6 +387,66 @@ func (h *RequestHandler) Close(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, map[string]any{"status": "closed"})
+}
+
+// Claims — GET /api/v1/requests/{id}/claims
+func (h *RequestHandler) Claims(w http.ResponseWriter, r *http.Request) {
+	requestID, err := UUIDParam(r, "id")
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	actor := ActorFrom(r.Context())
+	items, err := h.requests.ListClaims(r.Context(), requestID, actor.UserID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		row := map[string]any{
+			"id":           item.ID,
+			"dealer_id":    item.DealerID,
+			"status":       string(item.Status),
+			"dealer_name":  item.DealerName,
+			"company_name": item.CompanyName,
+			"created_at":   item.CreatedAt,
+		}
+		if item.DealID != nil {
+			row["deal_id"] = *item.DealID
+		}
+		out = append(out, row)
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": out, "max_claims": store.MaxActiveClaimsPerRequest})
+}
+
+type refuseDealerRequest struct {
+	DealerID string `json:"dealer_id"`
+}
+
+// RefuseDealer — POST /api/v1/requests/{id}/refuse-dealer
+func (h *RequestHandler) RefuseDealer(w http.ResponseWriter, r *http.Request) {
+	requestID, err := UUIDParam(r, "id")
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	var req refuseDealerRequest
+	if err := DecodeJSON(w, r, &req); err != nil {
+		Error(w, r, err)
+		return
+	}
+	dealerID, err := uuid.Parse(strings.TrimSpace(req.DealerID))
+	if err != nil {
+		Error(w, r, apierr.BadRequest("Некорректный дилер"))
+		return
+	}
+	actor := ActorFrom(r.Context())
+	if err := h.requests.RefuseDealer(r.Context(), requestID, actor.UserID, dealerID); err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"status": "refused"})
 }
 
 // readOffsetPage читает постраничность со смещением.

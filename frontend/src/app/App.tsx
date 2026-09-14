@@ -10,6 +10,7 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { AdminAuditPage, AdminModerationPage, AdminUsersPage } from '@/pages/cabinet/AdminPages';
 import { BannersPage } from '@/pages/cabinet/BannersPage';
+import { DocumentTemplatesPage } from '@/pages/cabinet/DocumentTemplatesPage';
 import { CabinetHomePage } from '@/pages/cabinet/CabinetHomePage';
 import { DealDetailPage } from '@/pages/cabinet/DealDetailPage';
 import { FavoritesPage } from '@/pages/cabinet/FavoritesPage';
@@ -76,6 +77,7 @@ export function App() {
                     <Route path="channels" element={<ChannelsPage />} />
                     <Route path="sellers" element={<SellersCabinetPage />} />
                     <Route path="banners" element={<BannersPage />} />
+                    <Route path="document-templates" element={<DocumentTemplatesPage />} />
                     <Route path="analytics" element={<AnalyticsLayout />}>
                       <Route index element={<AnalyticsPage />} />
                       <Route path="reports" element={<ReportsPage />} />

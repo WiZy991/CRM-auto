@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { carsApi, dealsApi, errorMessage, getSession, uploadsApi } from '@/lib/api';
+import { carsApi, dealsApi, documentTemplatesApi, errorMessage, getSession, requestsApi, uploadsApi } from '@/lib/api';
 import type { Deal, Stage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
@@ -20,6 +20,7 @@ import {
   cn,
   useToast,
 } from '@/ui';
+import { useAuth } from '@/features/auth/auth-context';
 
 const DOCUMENT_KINDS = [
   { value: 'contract', title: 'Договор' },
@@ -55,6 +56,7 @@ function stageFacts(deal: Deal): string {
 
 export function DealDetailPage() {
   const { id = '' } = useParams();
+  const { hasRole } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<DealTab>('stage');
@@ -140,6 +142,20 @@ export function DealDetailPage() {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  const refuseDealer = useMutation({
+    mutationFn: () => {
+      const d = details.data?.deal;
+      if (!d?.request_id) throw new Error('Нет связанной заявки');
+      return requestsApi.refuseDealer(d.request_id, d.dealer_id);
+    },
+    onSuccess: () => {
+      toast.success('Вы отказались от компании — слот в пуле освобождён');
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['requests'] });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
   const saveFinance = useMutation({
     mutationFn: () => {
       const amount = Number(amountRub.replace(/\s/g, '').replace(',', '.'));
@@ -205,6 +221,29 @@ export function DealDetailPage() {
         toast.info(title, data.warnings.join('. '));
       } else {
         toast.success(title);
+      }
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  const templates = useQuery({
+    queryKey: queryKeys.documentTemplates,
+    queryFn: ({ signal }) => documentTemplatesApi.list(signal),
+    enabled: Boolean(id),
+  });
+
+  const fillTemplate = useMutation({
+    mutationFn: (templateId: string) =>
+      dealsApi.generateFromTemplate(id, {
+        template_id: templateId,
+        visible_to_client: docVisible,
+      }),
+    onSuccess: (data) => {
+      invalidate();
+      if (data.warnings.length > 0) {
+        toast.info('Шаблон заполнен', data.warnings.join('. '));
+      } else {
+        toast.success('Шаблон заполнен');
       }
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -626,6 +665,32 @@ export function DealDetailPage() {
                 Сформировать пакет
               </Button>
 
+              {can_manage && (templates.data?.items?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-[var(--text-muted)]">Ваши шаблоны DOCX</p>
+                  <ul className="flex flex-col gap-2">
+                    {templates.data!.items.map((tpl) => (
+                      <li
+                        key={tpl.id}
+                        className="flex flex-wrap items-center justify-between gap-2 border border-[var(--border-hairline)] px-3 py-2"
+                      >
+                        <span className="text-sm">{tpl.title}</span>
+                        <Button
+                          size="sm"
+                          loading={fillTemplate.isPending && fillTemplate.variables === tpl.id}
+                          onClick={() => fillTemplate.mutate(tpl.id)}
+                        >
+                          Заполнить
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  <LinkButton to="/app/document-templates" size="sm" variant="ghost">
+                    Управление шаблонами
+                  </LinkButton>
+                </div>
+              )}
+
               <details className="text-sm">
                 <summary className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   Отдельные формы
@@ -828,6 +893,23 @@ export function DealDetailPage() {
                   Выдана, закрыть
                 </Button>
               )}
+            </section>
+          )}
+
+          {!can_manage && hasRole('client') && deal.outcome === 'open' && deal.request_id && (
+            <section className="panel space-y-2 p-3 sm:p-4">
+              <h2 className="text-sm font-medium">Компания по заявке</h2>
+              <p className="text-sm text-[var(--text-muted)]">
+                Отказ закрывает только эту сделку и освобождает слот в пуле для других дилеров.
+              </p>
+              <Button
+                loading={refuseDealer.isPending}
+                onClick={() => {
+                  if (window.confirm('Отказаться от этой компании?')) refuseDealer.mutate();
+                }}
+              >
+                Отказаться от компании
+              </Button>
             </section>
           )}
 

@@ -280,14 +280,15 @@ func (r *Requests) ListForDealer(ctx context.Context, dealerID uuid.UUID, status
 	return items, total, nil
 }
 
-// ListOpenPool возвращает нераспределённые заявки.
+// ListOpenPool возвращает заявки со свободным слотом.
 //
 // Контакты клиента из этого списка вычищаются: пул видят все проверенные
 // дилеры, и телефон должен становиться доступен только после того, как
 // дилер взял заявку в работу и принял на себя ответственность за неё.
-func (r *Requests) ListOpenPool(ctx context.Context, limit, offset int) ([]store.RequestListItem, int, error) {
+func (r *Requests) ListOpenPool(ctx context.Context, dealerID uuid.UUID, limit, offset int) ([]store.RequestListItem, int, error) {
 	items, total, err := r.requests.List(ctx, store.RequestFilter{
 		OpenPool: true,
+		DealerID: &dealerID,
 		Limit:    limit,
 		Offset:   offset,
 	})
@@ -330,18 +331,47 @@ func (r *Requests) Get(ctx context.Context, requestID uuid.UUID, viewer Viewer) 
 	return request, nil
 }
 
-// Claim закрепляет заявку из общего пула за дилером.
+// Claim закрепляет заявку из общего пула за дилером (один из до 5 слотов).
 func (r *Requests) Claim(ctx context.Context, requestID, dealerID uuid.UUID) (*domain.Request, error) {
 	request, err := r.requests.Claim(ctx, requestID, dealerID)
 	if err != nil {
 		if errors.Is(err, store.ErrAlreadyClaimed) {
-			return nil, apierr.Conflict("Заявку уже взял другой дилер")
+			return nil, apierr.Conflict("Вы уже ведёте эту заявку или она недоступна")
+		}
+		if errors.Is(err, store.ErrPoolFull) {
+			return nil, apierr.Conflict("По заявке уже работают 5 дилеров. Слот освободится после отказа одного из них.")
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, apierr.NotFound("Заявка")
 		}
 		return nil, apierr.Internal(err)
 	}
 
 	r.recordAudit(ctx, dealerID, "request.claim", request.ID.String(), nil)
 	return request, nil
+}
+
+// RefuseDealer — клиент отказывается от конкретной дилерской компании.
+func (r *Requests) RefuseDealer(ctx context.Context, requestID, clientID, dealerID uuid.UUID) error {
+	_, err := r.requests.RefuseClaimByClient(ctx, requestID, clientID, dealerID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return apierr.NotFound("Заявка или компания")
+		}
+		return apierr.Internal(err)
+	}
+	if err := r.notify.Create(ctx, store.CreateNotificationParams{
+		UserID: dealerID,
+		Kind:   store.NotifyRequestAnswered,
+		Title:  "Клиент отказался от сотрудничества",
+		Body:   "Слот по заявке освобождён. Клиент выбрал не продолжать с вашей компанией.",
+		Link:   fmt.Sprintf("/app/requests"),
+	}); err != nil {
+		r.log.ErrorContext(ctx, "не удалось уведомить дилера об отказе клиента", "error", err)
+	}
+	r.recordAudit(ctx, clientID, "request.refuse_dealer", requestID.String(),
+		map[string]any{"dealer_id": dealerID.String()})
+	return nil
 }
 
 // Reply сохраняет ответ дилера на заявку.
@@ -410,6 +440,18 @@ func (r *Requests) Close(ctx context.Context, requestID, clientID uuid.UUID) err
 		return apierr.Internal(err)
 	}
 	return nil
+}
+
+// ListClaims возвращает компании, взявшие заявку (для клиента).
+func (r *Requests) ListClaims(ctx context.Context, requestID, clientID uuid.UUID) ([]store.RequestClaimView, error) {
+	items, err := r.requests.ListClaimsForRequest(ctx, requestID, clientID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, apierr.NotFound("Заявка")
+		}
+		return nil, apierr.Internal(err)
+	}
+	return items, nil
 }
 
 func (r *Requests) notifyRequestCreated(ctx context.Context, request *domain.Request, listingDealer *uuid.UUID) {

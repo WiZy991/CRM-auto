@@ -53,6 +53,7 @@ type dealResponse struct {
 	DealerID uuid.UUID  `json:"dealer_id"`
 	CarID    *uuid.UUID `json:"car_id,omitempty"`
 	SellerID *uuid.UUID `json:"seller_id,omitempty"`
+	RequestID *uuid.UUID `json:"request_id,omitempty"`
 
 	Stage      string `json:"stage"`
 	StageTitle string `json:"stage_title"`
@@ -109,6 +110,7 @@ func toDealResponse(deal *domain.Deal) dealResponse {
 		DealerID: deal.DealerID,
 		CarID:    deal.CarID,
 		SellerID: deal.SellerID,
+		RequestID: deal.RequestID,
 
 		Stage:         string(deal.Stage),
 		StageTitle:    deal.Stage.Title(),

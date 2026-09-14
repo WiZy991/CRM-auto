@@ -164,7 +164,7 @@ func run() error {
 		deals, requests, dealComms, store.NewReviews(pool), notifications, converter, securityLog, log,
 		service.PipelineExtras{
 			Users: users, Dealers: dealerStore, Cars: cars, Sellers: sellers,
-			Cipher: piiCipher, Disk: disk,
+			Cipher: piiCipher, Disk: disk, Templates: store.NewDocumentTemplates(pool),
 		})
 	sellerService := service.NewSellers(sellers, securityLog, log)
 	bannerCounters := service.NewBannerCounters(rdb, log)

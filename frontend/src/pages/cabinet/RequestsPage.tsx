@@ -33,10 +33,17 @@ function ClientRequests() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [claimsFor, setClaimsFor] = useState<RequestListItem | null>(null);
 
   const list = useQuery({
     queryKey: queryKeys.requestsMine({}),
     queryFn: ({ signal }) => requestsApi.mine({ limit: 50 }, signal),
+  });
+
+  const claims = useQuery({
+    queryKey: ['requests', 'claims', claimsFor?.id],
+    queryFn: ({ signal }) => requestsApi.claims(claimsFor!.id, signal),
+    enabled: Boolean(claimsFor?.id),
   });
 
   const close = useMutation({
@@ -48,12 +55,23 @@ function ClientRequests() {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  const refuse = useMutation({
+    mutationFn: ({ requestId, dealerId }: { requestId: string; dealerId: string }) =>
+      requestsApi.refuseDealer(requestId, dealerId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Вы отказались от компании — слот в пуле освобождён');
+      setClaimsFor(null);
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        kicker="Клиент"
-        title="Заявки"
-        description="Запрос дилеру: «подберите такой автомобиль» или вопрос по лоту из каталога. Когда дилер возьмёт заявку, появится сделка."
+        title="Мои заявки"
+        description="До 5 дилеров могут взять одну заявку. Если отказались от компании — её место снова доступно в пуле."
         actions={
           <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
             Новая заявка
@@ -61,28 +79,53 @@ function ClientRequests() {
         }
       />
       {list.isPending && <Spinner className="text-[var(--accent)]" />}
-      {list.isError && (
-        <EmptyState title="Не удалось загрузить заявки" description={errorMessage(list.error)} />
-      )}
       {list.data && (
         <DataTable
-          columns={clientColumns((id) => close.mutate(id))}
+          columns={clientColumns(close.mutate, (row) => setClaimsFor(row))}
           rows={list.data.items}
           rowKey={(row) => row.id}
-          empty={
-            <EmptyState
-              title="Заявок нет"
-              description="Опишите автомобиль — дилер заберёт заявку из пула."
-            />
-          }
         />
       )}
       <CreateRequestModal open={open} onClose={() => setOpen(false)} />
+      <Modal
+        open={Boolean(claimsFor)}
+        onClose={() => setClaimsFor(null)}
+        title={claimsFor ? `Компании по заявке № ${claimsFor.number}` : 'Компании'}
+      >
+        {claims.isPending && <Spinner className="text-[var(--accent)]" />}
+        {claims.data && claims.data.items.length === 0 && (
+          <p className="text-sm text-[var(--text-muted)]">Пока никто не взял заявку в работу.</p>
+        )}
+        <ul className="divide-y divide-[var(--border-hairline)]">
+          {(claims.data?.items ?? []).map((item) => (
+            <li key={item.id} className="flex items-center justify-between gap-3 py-3">
+              <div>
+                <p className="text-sm font-medium">{item.company_name || item.dealer_name}</p>
+                <p className="text-xs text-[var(--text-muted)]">{item.status}</p>
+              </div>
+              {(item.status === 'active' || item.status === 'converted') && (
+                <Button
+                  size="sm"
+                  loading={refuse.isPending}
+                  onClick={() =>
+                    refuse.mutate({ requestId: claimsFor!.id, dealerId: item.dealer_id })
+                  }
+                >
+                  Отказаться
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </div>
   );
 }
 
-function clientColumns(onClose: (id: string) => void) {
+function clientColumns(
+  onClose: (id: string) => void,
+  onCompanies: (row: RequestListItem) => void,
+) {
   return [
     {
       key: 'n',
@@ -97,6 +140,12 @@ function clientColumns(onClose: (id: string) => void) {
       render: (row: RequestListItem) => <Badge tone={requestTone(row.status)}>{row.status_title}</Badge>,
     },
     {
+      key: 'slots',
+      header: 'Дилеры',
+      render: (row: RequestListItem) =>
+        `${row.active_claims ?? 0}/${row.max_claims ?? 5}`,
+    },
+    {
       key: 'reply',
       header: 'Ответ',
       render: (row: RequestListItem) => row.dealer_reply || '—',
@@ -105,12 +154,18 @@ function clientColumns(onClose: (id: string) => void) {
     {
       key: 'act',
       header: '',
-      render: (row: RequestListItem) =>
-        row.status === 'new' || row.status === 'in_progress' || row.status === 'answered' ? (
-          <Button size="sm" variant="ghost" onClick={() => onClose(row.id)}>
-            Закрыть
+      render: (row: RequestListItem) => (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="ghost" onClick={() => onCompanies(row)}>
+            Компании
           </Button>
-        ) : null,
+          {row.status === 'new' || row.status === 'in_progress' || row.status === 'answered' ? (
+            <Button size="sm" variant="ghost" onClick={() => onClose(row.id)}>
+              Закрыть
+            </Button>
+          ) : null}
+        </div>
+      ),
     },
   ];
 }
@@ -246,11 +301,11 @@ function DealerRequests() {
       <PageHeader
         kicker="Дилер"
         title="Заявки"
-        description="Пул — свободные обращения покупателей, их можно взять в работу. «Мои» — уже ваши: из них открывается сделка в воронке."
+        description="Пул — до 5 дилеров на заявку. Отказ клиента или lost-сделка освобождает слот. «Мои» — уже ваши заявки."
       />
       <PageGuide
         items={[
-          { title: 'Пул', text: 'Новые запросы без дилера. «Взять» закрепляет заявку за вами.' },
+          { title: 'Пул', text: 'Свободные слоты (N/5). Нельзя взять повторно ту же заявку, пока ваш claim активен.' },
           { title: 'Мои', text: 'То, что уже ведёте. Ответ клиенту — в карточке заявки.' },
           { title: 'Сделка', text: 'Когда договорились — создайте сделку в воронке или из заявки.' },
         ]}
@@ -269,6 +324,19 @@ function DealerRequests() {
           { key: 'client', header: 'Клиент', render: (row) => row.client_name || '—' },
           { key: 'sum', header: 'Суть', render: (row) => row.summary },
           {
+            key: 'slots',
+            header: 'Слоты',
+            render: (row) => {
+              const n = row.active_claims ?? 0;
+              const max = row.max_claims ?? 5;
+              return (
+                <Badge tone={n >= max ? 'amber' : 'neutral'}>
+                  {n}/{max}
+                </Badge>
+              );
+            },
+          },
+          {
             key: 'st',
             header: 'Статус',
             render: (row) => <Badge tone={requestTone(row.status)}>{row.status_title}</Badge>,
@@ -279,8 +347,12 @@ function DealerRequests() {
             header: '',
             render: (row) =>
               tab === 'pool' ? (
-                <Button size="sm" onClick={() => claim.mutate(row.id)}>
-                  Взять
+                <Button
+                  size="sm"
+                  disabled={(row.active_claims ?? 0) >= (row.max_claims ?? 5)}
+                  onClick={() => claim.mutate(row.id)}
+                >
+                  {(row.active_claims ?? 0) >= (row.max_claims ?? 5) ? 'Занято' : 'Взять'}
                 </Button>
               ) : (
                 <div className="flex flex-wrap justify-end gap-1">
@@ -303,7 +375,7 @@ function DealerRequests() {
             title={tab === 'pool' ? 'Пул пуст' : 'Своих заявок нет'}
             description={
               tab === 'pool'
-                ? 'Здесь появляются заявки покупателей по каталогу и без выбранного дилера. Адресные заявки с карточки импортёра — во вкладке «Мои».'
+                ? 'Здесь заявки со свободным слотом (менее 5 активных дилеров). После отказа клиента или lost слот снова появляется.'
                 : 'Возьмите заявку из пула кнопкой «Взять» — она окажется здесь, и из неё можно создать сделку.'
             }
           />

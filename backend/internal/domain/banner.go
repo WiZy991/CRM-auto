@@ -14,6 +14,7 @@ type BannerPlacement string
 
 const (
 	PlacementHomeHero       BannerPlacement = "home_hero"
+	PlacementHomeStrip      BannerPlacement = "home_strip"
 	PlacementHomeInline     BannerPlacement = "home_inline"
 	PlacementCatalogTop     BannerPlacement = "catalog_top"
 	PlacementCatalogSidebar BannerPlacement = "catalog_sidebar"
@@ -21,8 +22,9 @@ const (
 )
 
 var placementTitles = map[BannerPlacement]string{
-	PlacementHomeHero:       "Главная, первый экран",
-	PlacementHomeInline:     "Главная, в ленте",
+	PlacementHomeStrip:      "Главная, полоса после «как купить»",
+	PlacementHomeHero:       "Главная (устаревший слот → полоса)",
+	PlacementHomeInline:     "Главная, предложения дилеров (низ)",
 	PlacementCatalogTop:     "Каталог, верх страницы",
 	PlacementCatalogSidebar: "Каталог, боковая колонка",
 	PlacementCarPage:        "Карточка автомобиля",
@@ -30,8 +32,9 @@ var placementTitles = map[BannerPlacement]string{
 
 // PlacementOrder задаёт порядок в справочнике — от самых заметных мест.
 var PlacementOrder = []BannerPlacement{
-	PlacementHomeHero, PlacementHomeInline,
+	PlacementHomeStrip, PlacementHomeInline,
 	PlacementCatalogTop, PlacementCatalogSidebar, PlacementCarPage,
+	PlacementHomeHero, // deprecated alias, kept for existing banners
 }
 
 func (p BannerPlacement) Valid() bool { _, ok := placementTitles[p]; return ok }

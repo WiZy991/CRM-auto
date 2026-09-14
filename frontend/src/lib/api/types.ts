@@ -183,6 +183,7 @@ export interface Deal {
   dealer_id: UUID;
   car_id?: UUID;
   seller_id?: UUID;
+  request_id?: UUID;
 
   stage: Stage;
   stage_title: string;
@@ -305,6 +306,24 @@ export interface DealDocument {
   uploader_name?: string;
   visible_to_client: boolean;
   created_at: Timestamp;
+}
+
+export interface DocumentField {
+  key: string;
+  title: string;
+}
+
+export interface DocumentTemplate {
+  id: UUID;
+  title: string;
+  kind: string;
+  kind_title: string;
+  stage?: string;
+  placeholders: string[];
+  field_map: Record<string, string>;
+  bytes: number;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface DealReview {
@@ -439,6 +458,18 @@ export interface RequestListItem extends ClientRequest {
   dealer_name?: string;
   car_title?: string;
   has_deal: boolean;
+  active_claims?: number;
+  max_claims?: number;
+}
+
+export interface RequestClaimItem {
+  id: UUID;
+  dealer_id: UUID;
+  status: string;
+  dealer_name: string;
+  company_name?: string;
+  deal_id?: UUID;
+  created_at: Timestamp;
 }
 
 export interface CreateRequestInput {
@@ -530,6 +561,7 @@ export interface SellerForm {
 // --- Баннеры ----------------------------------------------------------------
 
 export type BannerPlacement =
+  | 'home_strip'
   | 'home_hero'
   | 'home_inline'
   | 'catalog_top'
@@ -733,7 +765,15 @@ export interface DealerForm {
   work_countries: string[];
 }
 
-export type SocialNetwork = 'telegram' | 'vk' | 'whatsapp' | 'instagram' | 'youtube' | 'rutube';
+export type SocialNetwork =
+  | 'telegram'
+  | 'vk'
+  | 'whatsapp'
+  | 'instagram'
+  | 'youtube'
+  | 'rutube'
+  | 'avito'
+  | 'drom';
 export type SocialAccountStatus = 'disconnected' | 'connected' | 'needs_reauth' | 'error';
 
 export interface SocialChannel {
@@ -750,6 +790,8 @@ export interface SocialChannel {
   phone_number_id?: string;
   business_account_id?: string;
   destination?: string;
+  client_id?: string;
+  profile_id?: string;
   platform_ready: boolean;
   platform_hint?: string;
   publish_hint?: string;

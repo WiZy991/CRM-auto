@@ -1,7 +1,7 @@
 export { api, refreshSession, request, setSessionLostHandler } from './client';
 export type { HttpMethod, QueryParams, RequestOptions } from './client';
 
-export { authApi, carsApi, dealsApi, notificationsApi, requestsApi, sellersApi, bannersApi, adminApi, uploadsApi, dealersApi, channelsApi } from './endpoints';
+export { authApi, carsApi, dealsApi, notificationsApi, requestsApi, sellersApi, bannersApi, adminApi, uploadsApi, dealersApi, channelsApi, documentTemplatesApi } from './endpoints';
 export type { CatalogQuery } from './endpoints';
 
 export { ApiError, NetworkError, errorMessage, isApiError } from './errors';

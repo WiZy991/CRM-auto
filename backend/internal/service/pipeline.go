@@ -31,22 +31,24 @@ type Pipeline struct {
 	audit     *store.SecurityLog
 	log       *slog.Logger
 
-	users   *store.Users
-	dealers *store.Dealers
-	cars    *store.Cars
-	sellers *store.Sellers
-	cipher  *security.Cipher
-	disk    *storage.Disk
+	users     *store.Users
+	dealers   *store.Dealers
+	cars      *store.Cars
+	sellers   *store.Sellers
+	cipher    *security.Cipher
+	disk      *storage.Disk
+	templates *store.DocumentTemplates
 }
 
 // PipelineExtras — источники для автозаполнения печатных форм.
 type PipelineExtras struct {
-	Users   *store.Users
-	Dealers *store.Dealers
-	Cars    *store.Cars
-	Sellers *store.Sellers
-	Cipher  *security.Cipher
-	Disk    *storage.Disk
+	Users     *store.Users
+	Dealers   *store.Dealers
+	Cars      *store.Cars
+	Sellers   *store.Sellers
+	Cipher    *security.Cipher
+	Disk      *storage.Disk
+	Templates *store.DocumentTemplates
 }
 
 func NewPipeline(
@@ -65,6 +67,7 @@ func NewPipeline(
 		notify: notify, converter: converter, audit: audit, log: log,
 		users: extras.Users, dealers: extras.Dealers, cars: extras.Cars,
 		sellers: extras.Sellers, cipher: extras.Cipher, disk: extras.Disk,
+		templates: extras.Templates,
 	}
 }
 

@@ -128,9 +128,10 @@ type Request struct {
 	UpdatedAt time.Time
 }
 
-// InOpenPool сообщает, что заявка ещё не закреплена за дилером.
+// InOpenPool сообщает, что в заявке ещё есть свободный слот для дилера.
+// Точный подсчёт active claims — в store при Claim/List.
 func (r *Request) InOpenPool() bool {
-	return r.DealerID == nil && r.Status == RequestNew
+	return !r.Status.IsFinal()
 }
 
 // Involves проверяет причастность пользователя к заявке.
@@ -141,14 +142,30 @@ func (r *Request) Involves(userID uuid.UUID) bool {
 	return r.DealerID != nil && *r.DealerID == userID
 }
 
+// ClaimStatus — статус взятия заявки дилером (слот из 5).
+type ClaimStatus string
+
+const (
+	ClaimActive          ClaimStatus = "active"
+	ClaimLost            ClaimStatus = "lost"
+	ClaimRefusedByClient ClaimStatus = "refused_by_client"
+	ClaimConverted       ClaimStatus = "converted"
+)
+
+func (s ClaimStatus) Valid() bool {
+	switch s {
+	case ClaimActive, ClaimLost, ClaimRefusedByClient, ClaimConverted:
+		return true
+	default:
+		return false
+	}
+}
+
+// MaxActiveClaims — сколько дилеров одновременно могут вести заявку.
+const MaxActiveClaims = 5
+
 // CanConvertToDeal сообщает, можно ли создать сделку по заявке.
 func (r *Request) CanConvertToDeal() error {
-	if r.DealerID == nil {
-		return fmt.Errorf("заявка не закреплена за дилером")
-	}
-	if r.Status == RequestConverted {
-		return fmt.Errorf("по этой заявке сделка уже создана")
-	}
 	if r.Status == RequestRejected || r.Status == RequestClosed {
 		return fmt.Errorf("заявка закрыта, создать сделку нельзя")
 	}

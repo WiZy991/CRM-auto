@@ -82,6 +82,7 @@ export const queryKeys = {
   bannersActive: (placement: string) => ['banners', 'active', placement] as const,
   bannersMine: ['banners', 'mine'] as const,
   bannersPending: ['banners', 'pending'] as const,
+  documentTemplates: ['dealer', 'document-templates'] as const,
 
   adminOverview: ['admin', 'overview'] as const,
   adminUsers: (filters: unknown) => ['admin', 'users', filters] as const,
