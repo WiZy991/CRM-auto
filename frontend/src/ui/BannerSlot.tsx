@@ -4,6 +4,19 @@ import { cn } from './cn';
 
 type BannerSlotVariant = 'editorial' | 'strip' | 'rail' | 'card';
 
+function AdMark({ onDark }: { onDark?: boolean }) {
+  return (
+    <span
+      className={cn(
+        'pointer-events-none select-none text-[10px] leading-none tracking-wide uppercase',
+        onDark ? 'text-white/55' : 'text-[var(--text-muted)]',
+      )}
+    >
+      Реклама
+    </span>
+  );
+}
+
 export function BannerSlot({
   banners,
   compact,
@@ -24,7 +37,7 @@ export function BannerSlot({
     return (
       <a
         href={banner.href}
-        rel="noopener noreferrer"
+        rel="noopener noreferrer sponsored"
         className={cn(
           'group relative block overflow-hidden border-y border-[var(--border-hairline)]',
           className,
@@ -41,6 +54,9 @@ export function BannerSlot({
             <div className="bg-hatch absolute inset-0" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-transparent" />
+          <div className="absolute top-3 left-4 z-10 sm:left-6 lg:left-8">
+            <AdMark onDark />
+          </div>
           <div className="relative z-10 mx-auto flex min-h-44 w-full max-w-[1600px] flex-col justify-end px-4 py-8 sm:min-h-56 sm:px-6 md:min-h-64 lg:px-8">
             <p className="text-xs font-medium tracking-wide text-white/80">{banner.cta_label}</p>
             <p className="mt-1 max-w-xl text-xl font-semibold text-white sm:text-2xl">{banner.title}</p>
@@ -60,8 +76,8 @@ export function BannerSlot({
           <a
             key={banner.id}
             href={banner.href}
-            rel="noopener noreferrer"
-            className="flex min-h-14 items-stretch overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
+            rel="noopener noreferrer sponsored"
+            className="relative flex min-h-14 items-stretch overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
           >
             <div className="w-20 shrink-0 bg-[var(--surface-sunken)] sm:w-28">
               {banner.image_url ? (
@@ -70,13 +86,16 @@ export function BannerSlot({
                 <div className="bg-hatch size-full" />
               )}
             </div>
-            <div className="flex min-w-0 flex-1 flex-col justify-center px-3 py-2">
+            <div className="flex min-w-0 flex-1 flex-col justify-center px-3 py-2 pr-14">
               <p className="truncate text-sm font-medium">{banner.title}</p>
               <p className="truncate text-xs text-[var(--text-muted)]">
                 {banner.cta_label}
                 {banner.subtitle ? ` · ${banner.subtitle}` : ''}
               </p>
             </div>
+            <span className="absolute top-1.5 right-2">
+              <AdMark />
+            </span>
           </a>
         ))}
       </div>
@@ -84,16 +103,18 @@ export function BannerSlot({
   }
 
   if (variant === 'rail') {
-    // Узкая колонка: максимум 2 баннера, картинка сверху — не раздувает страницу.
     return (
       <aside className={cn('flex flex-col gap-3', className)}>
         {banners.slice(0, 2).map((banner) => (
           <a
             key={banner.id}
             href={banner.href}
-            rel="noopener noreferrer"
-            className="block overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
+            rel="noopener noreferrer sponsored"
+            className="relative block overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)]"
           >
+            <span className="absolute top-1.5 right-2 z-10 rounded-sm bg-black/45 px-1 py-0.5">
+              <AdMark onDark />
+            </span>
             <div className="aspect-[4/3] bg-[var(--surface-sunken)]">
               {banner.image_url ? (
                 <img src={banner.image_url} alt="" className="size-full object-cover" />
@@ -126,12 +147,15 @@ export function BannerSlot({
         <a
           key={banner.id}
           href={banner.href}
-          rel="noopener noreferrer"
+          rel="noopener noreferrer sponsored"
           className={cn(
-            'grid overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)] md:grid-cols-[1fr_1.1fr]',
+            'relative grid overflow-hidden border border-[var(--border-hairline)] bg-[var(--surface)] md:grid-cols-[1fr_1.1fr]',
             compact ? 'min-h-20' : 'min-h-24',
           )}
         >
+          <span className="absolute top-1.5 right-2 z-10">
+            <AdMark />
+          </span>
           <div className="min-h-20 bg-[var(--surface-sunken)]">
             {banner.image_url ? (
               <img src={banner.image_url} alt="" className="size-full object-cover" />
