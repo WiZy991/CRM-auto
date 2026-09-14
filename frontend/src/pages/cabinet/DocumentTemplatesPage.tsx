@@ -37,6 +37,8 @@ export function DocumentTemplatesPage() {
     queryFn: ({ signal }) => documentTemplatesApi.list(signal),
   });
 
+  const fields = list.data?.fields ?? [];
+
   const upload = useMutation({
     mutationFn: () => {
       if (!file) throw new Error('Выберите DOCX');
@@ -44,7 +46,12 @@ export function DocumentTemplatesPage() {
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.documentTemplates });
-      toast.success('Шаблон загружен — проверьте маппинг полей');
+      const n = data.template.placeholders.length;
+      toast.success(
+        n > 0
+          ? `Шаблон загружен, найдено маркеров: ${n}. При заполнении подставятся все {{поля}} разом.`
+          : 'Шаблон загружен. Вставьте теги {{…}} из списка ниже — иначе в договоре нечего менять.',
+      );
       setFile(null);
       setEdit(data.template);
       setMapDraft({ ...data.template.field_map });
@@ -64,7 +71,7 @@ export function DocumentTemplatesPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.documentTemplates });
-      toast.success('Маппинг сохранён');
+      toast.success('Сохранено');
       setEdit(null);
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -83,22 +90,78 @@ export function DocumentTemplatesPage() {
     if (edit) setMapDraft({ ...edit.field_map });
   }, [edit?.id]);
 
-  const fields = list.data?.fields ?? [];
+  async function copyAllTags() {
+    const text = fields.map((f) => `{{${f.key}}}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Все теги скопированы — вставьте в Word в нужные места');
+    } catch {
+      toast.error('Не удалось скопировать');
+    }
+  }
+
+  async function copyTag(key: string) {
+    try {
+      await navigator.clipboard.writeText(`{{${key}}}`);
+      toast.success(`Скопировано {{${key}}}`);
+    } catch {
+      toast.error('Не удалось скопировать');
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         kicker="Документы"
         title="Шаблоны DOCX"
-        description="Загрузите свой договор с плейсхолдерами {{client.name}} или «ФИО». При формировании по сделке поля подставятся автоматически."
+        description="В договор в Word вставляете теги вида {{client.name}}, {{deal.amount}}, {{car.vin}}. Кнопка «Заполнить» в сделке подставляет сразу все поля CRM — не по одному."
       />
       <PageGuide
         items={[
-          { title: 'Плейсхолдеры', text: 'В Word: {{deal.amount}}, {{car.vin}} или русские подписи в «ёлочках».' },
-          { title: 'Маппинг', text: 'После загрузки сверьте автосопоставление и поправьте вручную.' },
-          { title: 'Сделка', text: 'Во вкладке «Документы» появится кнопка «Заполнить» у каждого шаблона.' },
+          {
+            title: 'Теги в Word',
+            text: 'Скопируйте теги из списка ниже и вставьте вместо пустых мест в договоре. Обычный текст «ФИО» без {{ }} система не угадает.',
+          },
+          {
+            title: 'Заполнить',
+            text: 'В карточке сделки → Документы → «Заполнить» у шаблона. Меняются все {{поля}} разом из данных сделки.',
+          },
+          {
+            title: 'Маппинг',
+            text: 'Нужен только если в файле свои маркеры вроде «ФИО клиента» — сопоставьте их с полем CRM.',
+          },
         ]}
       />
+
+      <section className="panel space-y-3 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Поля сделки (все сразу)</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Это не «выберите 2 поля». При заполнении подставляется весь каталог, где в DOCX есть
+              соответствующий тег.
+            </p>
+          </div>
+          <Button size="sm" onClick={() => void copyAllTags()} disabled={fields.length === 0}>
+            Скопировать все теги
+          </Button>
+        </div>
+        {list.isPending && <Spinner className="text-[var(--accent)]" />}
+        <ul className="grid max-h-64 gap-1 overflow-y-auto sm:grid-cols-2">
+          {fields.map((f) => (
+            <li key={f.key} className="flex items-center justify-between gap-2 text-sm">
+              <span className="min-w-0 truncate text-[var(--text-secondary)]">{f.title}</span>
+              <button
+                type="button"
+                className="shrink-0 font-mono text-xs text-[var(--link)] underline underline-offset-2"
+                onClick={() => void copyTag(f.key)}
+              >
+                {`{{${f.key}}}`}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className="panel space-y-3 p-4">
         <h2 className="text-sm font-semibold">Загрузить DOCX</h2>
@@ -123,18 +186,17 @@ export function DocumentTemplatesPage() {
           loading={upload.isPending}
           onClick={() => upload.mutate()}
         >
-          Загрузить и разобрать
+          Загрузить
         </Button>
       </section>
 
-      {list.isPending && <Spinner className="text-[var(--accent)]" />}
       {list.isError && (
         <EmptyState title="Не удалось загрузить шаблоны" description={errorMessage(list.error)} />
       )}
       {list.data && list.data.items.length === 0 && (
         <EmptyState
           title="Шаблонов пока нет"
-          description="Подготовьте DOCX с плейсхолдерами и загрузите выше."
+          description="Вставьте теги в договор, сохраните DOCX и загрузите файл."
         />
       )}
       <ul className="space-y-2">
@@ -146,7 +208,7 @@ export function DocumentTemplatesPage() {
             <div>
               <p className="font-medium">{item.title}</p>
               <p className="text-xs text-[var(--text-muted)]">
-                {item.kind_title} · маркеров {item.placeholders.length} ·{' '}
+                {item.kind_title} · своих маркеров {item.placeholders.length} ·{' '}
                 {Math.round(item.bytes / 1024)} КБ
               </p>
             </div>
@@ -158,7 +220,7 @@ export function DocumentTemplatesPage() {
                   setMapDraft({ ...item.field_map });
                 }}
               >
-                Поля
+                Доп. маппинг
               </Button>
               <Button size="sm" variant="ghost" onClick={() => remove.mutate(item.id)}>
                 Удалить
@@ -171,12 +233,12 @@ export function DocumentTemplatesPage() {
       <Modal
         open={Boolean(edit)}
         onClose={() => setEdit(null)}
-        title={edit ? `Поля: ${edit.title}` : 'Поля'}
+        title={edit ? `Шаблон: ${edit.title}` : 'Шаблон'}
         footer={
           <>
             <Button onClick={() => setEdit(null)}>Отмена</Button>
             <Button variant="primary" loading={saveMap.isPending} onClick={() => saveMap.mutate()}>
-              Сохранить маппинг
+              Сохранить
             </Button>
           </>
         }
@@ -188,22 +250,27 @@ export function DocumentTemplatesPage() {
               value={edit.title}
               onChange={(e) => setEdit({ ...edit, title: e.target.value })}
             />
-            {(edit.placeholders.length ? edit.placeholders : Object.keys(mapDraft)).map((marker) => (
-              <SelectField
-                key={marker}
-                label={marker}
-                value={mapDraft[marker] ?? ''}
-                onChange={(e) => setMapDraft((prev) => ({ ...prev, [marker]: e.target.value }))}
-                options={[
-                  { value: '', title: '— не заполнять —' },
-                  ...fields.map((f) => ({ value: f.key, title: `${f.title} (${f.key})` })),
-                ]}
-              />
-            ))}
-            {edit.placeholders.length === 0 && (
+            <p className="text-sm text-[var(--text-muted)]">
+              Стандартные теги <code className="text-xs">{'{{client.name}}'}</code> и остальные из
+              каталога подставляются сами. Ниже — только нестандартные маркеры из вашего файла.
+            </p>
+            {(edit.placeholders.length ? edit.placeholders : Object.keys(mapDraft)).length === 0 ? (
               <p className="text-sm text-[var(--text-muted)]">
-                Маркеры не найдены. Вставьте в DOCX вид `{'{{client.name}}'}` и загрузите снова.
+                Нестандартных маркеров нет — достаточно тегов из каталога в Word.
               </p>
+            ) : (
+              (edit.placeholders.length ? edit.placeholders : Object.keys(mapDraft)).map((marker) => (
+                <SelectField
+                  key={marker}
+                  label={marker}
+                  value={mapDraft[marker] ?? ''}
+                  onChange={(e) => setMapDraft((prev) => ({ ...prev, [marker]: e.target.value }))}
+                  options={[
+                    { value: '', title: '— не заполнять —' },
+                    ...fields.map((f) => ({ value: f.key, title: `${f.title} (${f.key})` })),
+                  ]}
+                />
+              ))
             )}
           </div>
         )}

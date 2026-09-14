@@ -155,11 +155,18 @@ func ExtractMarkers(text string) []string {
 	for _, m := range reMustache.FindAllStringSubmatch(text, -1) {
 		add("{{" + m[1] + "}}")
 	}
+	// «…» и […] только если это известный ярлык поля — иначе цепляем цитаты из договора.
 	for _, m := range reGuillemet.FindAllStringSubmatch(text, -1) {
-		add("«" + m[1] + "»")
+		marker := "«" + m[1] + "»"
+		if guessKey(marker) != "" {
+			add(marker)
+		}
 	}
 	for _, m := range reBracket.FindAllStringSubmatch(text, -1) {
-		add("[" + m[1] + "]")
+		marker := "[" + m[1] + "]"
+		if guessKey(marker) != "" {
+			add(marker)
+		}
 	}
 	sort.Strings(out)
 	return out
