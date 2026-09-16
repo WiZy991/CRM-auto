@@ -8,7 +8,7 @@ import { queryKeys } from '@/lib/query';
 import { Badge, Button, CheckField, EmptyState, PageGuide, PageHeader, Spinner, TextField, useToast } from '@/ui';
 import type { BadgeTone } from '@/ui';
 
-import { CHANNEL_GUIDES } from './channelGuides';
+import { getChannelGuide } from './channelGuides';
 
 const STATUS_LABEL: Record<SocialChannel['status'], string> = {
   disconnected: 'Не подключено',
@@ -138,7 +138,7 @@ function ChannelCard({
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const guide = CHANNEL_GUIDES[channel.network];
+  const guide = getChannelGuide(channel.network);
 
   const save = useMutation({
     mutationFn: () =>

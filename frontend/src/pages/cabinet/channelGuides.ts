@@ -131,3 +131,14 @@ export const CHANNEL_GUIDES: Record<SocialNetwork, ChannelGuide> = {
     ],
   },
 };
+
+const FALLBACK_GUIDE: ChannelGuide = {
+  why: 'Инструкция для этого канала пока не загружена. Обновите страницу или пересоберите фронт.',
+  steps: ['Сохраните ключи и нажмите «Проверить связь».'],
+  errors: ['Если страница снова падает — очистите кэш браузера после деплоя.'],
+};
+
+/** Гайд по сети; неизвестная сеть (новый бэкенд / старый фронт) не роняет страницу. */
+export function getChannelGuide(network: string): ChannelGuide {
+  return CHANNEL_GUIDES[network as SocialNetwork] ?? FALLBACK_GUIDE;
+}
