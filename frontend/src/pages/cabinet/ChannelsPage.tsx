@@ -250,7 +250,7 @@ function ChannelCard({
         {channel.network === 'wechat' ? (
           <>
             <TextField
-              label="AppID (公众号)"
+              label="AppID бизнес-аккаунта"
               value={draft.clientId}
               onChange={(event) => onDraft({ clientId: event.target.value })}
             />

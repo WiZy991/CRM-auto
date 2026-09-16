@@ -517,10 +517,10 @@ func (d Drom) Publish(_ context.Context, _ Credentials, _ Listing) (string, erro
 	return "", fmt.Errorf("%w: автопост на Дром появится после partner credentials площадки", ErrNeedsPartner)
 }
 
-// WeChat — 微信公众号 (Official Account / Service Account).
-// Дилер хранит AppID + AppSecret своего кабинета mp.weixin.qq.com.
-// Проверка связи: реальный обмен на access_token.
-// Автопост: черновик в draft box (не freepublish — квота и модерация у дилера).
+// WeChat — бизнес-аккаунт WeChat Official Account (не личный чат).
+// Дилер хранит AppID + AppSecret кабинета mp.weixin.qq.com.
+// Проверка связи: обмен на access_token.
+// Автопост: черновик (не автопубликация — квота у дилера).
 type WeChat struct{}
 
 func (w WeChat) Test(ctx context.Context, creds Credentials) (string, error) {
@@ -609,7 +609,7 @@ func wechatCreds(creds Credentials) (appID, secret string, err error) {
 	appID = strings.TrimSpace(firstCred(creds.ClientID, creds.OwnerID))
 	secret = strings.TrimSpace(firstCred(creds.ClientSecret, creds.Token, creds.APIKey))
 	if appID == "" {
-		return "", "", fmt.Errorf("укажите AppID WeChat (公众号)")
+		return "", "", fmt.Errorf("укажите AppID бизнес-аккаунта WeChat")
 	}
 	if secret == "" {
 		return "", "", fmt.Errorf("укажите AppSecret WeChat")

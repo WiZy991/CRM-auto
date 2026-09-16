@@ -188,7 +188,7 @@ func (s *Social) emptyView(network domain.SocialNetwork) ChannelView {
 		}
 	case domain.NetworkWeChat:
 		view.PlatformReady = true
-		view.PlatformHint = "нужны AppID и AppSecret вашего 公众号; IP сервера CRM — в whitelist WeChat"
+		view.PlatformHint = "нужны AppID и AppSecret бизнес-аккаунта WeChat; IP сервера CRM — в белый список WeChat"
 	}
 	return view
 }
@@ -206,7 +206,7 @@ func publishHint(network domain.SocialNetwork) string {
 	case domain.NetworkDrom:
 		return "Сейчас: сохранение ключей и проверка полей. Автопост лота — после партнёрского доступа."
 	case domain.NetworkWeChat:
-		return "Автопост создаёт черновик в 公众号 (не публикует сам — квота WeChat). Нужна фото обложка лота."
+		return "Автопост создаёт черновик в WeChat (сам не публикует — лимиты площадки). Нужна фото-обложка лота."
 	default:
 		return ""
 	}
