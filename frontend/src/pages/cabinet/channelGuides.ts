@@ -115,4 +115,19 @@ export const CHANNEL_GUIDES: Record<SocialNetwork, ChannelGuide> = {
       'Партнёрский API может требовать whitelist IP — это на стороне Дрома.',
     ],
   },
+  wechat: {
+    why: '微信公众号 (Official Account). CRM проверяет AppID/AppSecret через access_token и кладёт лот в черновики 公众号. Личный WeChat / Moments API не даёт.',
+    steps: [
+      'Зарегистрируйте 服务号 или 订阅号 на mp.weixin.qq.com (для API удобнее 服务号).',
+      '设置与开发 → 基本配置: скопируйте AppID, сгенерируйте AppSecret.',
+      'В IP whitelist добавьте исходящий IP сервера CRM (иначе ошибка 40164).',
+      'В CRM: Каналы → WeChat → AppID и AppSecret → Сохранить → Проверить связь.',
+      'Автопост создаёт черновик (草稿). Опубликуйте из кабинета WeChat вручную — квота freepublish жёсткая.',
+    ],
+    errors: [
+      '40164 — IP сервера не в whitelist WeChat.',
+      'Неверный AppSecret — сгенерируйте заново в MP (старый сразу перестаёт работать).',
+      'Нет фото у лота — обложка для черновика обязательна.',
+    ],
+  },
 };

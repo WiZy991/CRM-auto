@@ -226,7 +226,8 @@ function ChannelCard({
         {channel.auth_kind === 'keys' &&
         channel.network !== 'rutube' &&
         channel.network !== 'avito' &&
-        channel.network !== 'drom' ? (
+        channel.network !== 'drom' &&
+        channel.network !== 'wechat' ? (
           <TextField
             label={channel.network === 'vk' ? 'Токен сообщества' : 'Токен'}
             type="password"
@@ -245,6 +246,25 @@ function ChannelCard({
             placeholder={channel.token_mask ? 'новый ключ, если меняете' : ''}
             onChange={(event) => onDraft({ apiKey: event.target.value, token: event.target.value })}
           />
+        ) : null}
+        {channel.network === 'wechat' ? (
+          <>
+            <TextField
+              label="AppID (公众号)"
+              value={draft.clientId}
+              onChange={(event) => onDraft({ clientId: event.target.value })}
+            />
+            <TextField
+              label="AppSecret"
+              type="password"
+              autoComplete="off"
+              value={draft.clientSecret || draft.token}
+              placeholder={channel.token_mask ? 'новый секрет, если меняете' : ''}
+              onChange={(event) =>
+                onDraft({ clientSecret: event.target.value, token: event.target.value })
+              }
+            />
+          </>
         ) : null}
         {channel.network === 'avito' ? (
           <>

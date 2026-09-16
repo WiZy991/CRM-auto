@@ -71,6 +71,7 @@ func NewSocial(
 			domain.NetworkRuTube:    pkgSocial.RuTube{},
 			domain.NetworkAvito:     pkgSocial.Avito{PartnerReady: cfg.AvitoPartnerReady()},
 			domain.NetworkDrom:      pkgSocial.Drom{PartnerReady: cfg.DromPartnerReady()},
+			domain.NetworkWeChat:    pkgSocial.WeChat{},
 		},
 	}
 }
@@ -185,6 +186,9 @@ func (s *Social) emptyView(network domain.SocialNetwork) ChannelView {
 		if !s.cfg.DromPartnerReady() {
 			view.PlatformHint = "автопост Дрома ждёт partner credentials площадки (DROM_API_KEY)"
 		}
+	case domain.NetworkWeChat:
+		view.PlatformReady = true
+		view.PlatformHint = "нужны AppID и AppSecret вашего 公众号; IP сервера CRM — в whitelist WeChat"
 	}
 	return view
 }
@@ -201,6 +205,8 @@ func publishHint(network domain.SocialNetwork) string {
 		return "Сейчас: сохранение ключей и проверка полей. Автопост лота — после партнёрского доступа."
 	case domain.NetworkDrom:
 		return "Сейчас: сохранение ключей и проверка полей. Автопост лота — после партнёрского доступа."
+	case domain.NetworkWeChat:
+		return "Автопост создаёт черновик в 公众号 (не публикует сам — квота WeChat). Нужна фото обложка лота."
 	default:
 		return ""
 	}

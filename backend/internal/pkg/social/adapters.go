@@ -1,12 +1,17 @@
 package social
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -510,6 +515,215 @@ func (d Drom) Test(_ context.Context, creds Credentials) (string, error) {
 
 func (d Drom) Publish(_ context.Context, _ Credentials, _ Listing) (string, error) {
 	return "", fmt.Errorf("%w: автопост на Дром появится после partner credentials площадки", ErrNeedsPartner)
+}
+
+// WeChat — 微信公众号 (Official Account / Service Account).
+// Дилер хранит AppID + AppSecret своего кабинета mp.weixin.qq.com.
+// Проверка связи: реальный обмен на access_token.
+// Автопост: черновик в draft box (не freepublish — квота и модерация у дилера).
+type WeChat struct{}
+
+func (w WeChat) Test(ctx context.Context, creds Credentials) (string, error) {
+	appID, secret, err := wechatCreds(creds)
+	if err != nil {
+		return "", err
+	}
+	token, err := w.accessToken(ctx, appID, secret)
+	if err != nil {
+		return "", err
+	}
+	if token == "" {
+		return "", fmt.Errorf("WeChat не вернул access_token")
+	}
+	return appID, nil
+}
+
+func (w WeChat) Publish(ctx context.Context, creds Credentials, listing Listing) (string, error) {
+	appID, secret, err := wechatCreds(creds)
+	if err != nil {
+		return "", err
+	}
+	token, err := w.accessToken(ctx, appID, secret)
+	if err != nil {
+		return "", err
+	}
+
+	photos := firstN(listing.PhotoURLs, 1)
+	if len(photos) == 0 {
+		return "", fmt.Errorf("%w: для черновика WeChat нужна хотя бы одна фотография лота (обложка)", ErrSkipped)
+	}
+
+	thumbID, err := w.uploadImage(ctx, token, photos[0])
+	if err != nil {
+		return "", fmt.Errorf("загрузка обложки в WeChat: %w", err)
+	}
+
+	title := strings.TrimSpace(listing.Title)
+	if title == "" {
+		title = "Автомобиль"
+	}
+	if utf8.RuneCountInString(title) > 32 {
+		runes := []rune(title)
+		title = string(runes[:32])
+	}
+
+	content := "<p>" + htmlEscape(listing.Caption) + "</p>"
+	if listing.URL != "" {
+		content += `<p><a href="` + htmlEscape(listing.URL) + `">` + htmlEscape(listing.URL) + `</a></p>`
+	}
+
+	body := map[string]any{
+		"articles": []map[string]any{{
+			"title":          title,
+			"thumb_media_id": thumbID,
+			"author":         "GoImport",
+			"digest":         truncateRunes(listing.Caption, 54),
+			"content":        content,
+			"content_source_url": listing.URL,
+			"need_open_comment":  0,
+		}},
+	}
+	var out struct {
+		MediaID string `json:"media_id"`
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+	raw := "https://api.weixin.qq.com/cgi-bin/draft/add?access_token=" + url.QueryEscape(token)
+	if err := doJSON(ctx, "POST", raw, nil, body, &out); err != nil {
+		return "", err
+	}
+	if out.ErrCode != 0 {
+		if out.ErrCode == 40001 || out.ErrCode == 42001 {
+			return "", fmt.Errorf("%w: %s", ErrNeedReauth, out.ErrMsg)
+		}
+		return "", fmt.Errorf("wechat draft/add: %d %s", out.ErrCode, out.ErrMsg)
+	}
+	if out.MediaID == "" {
+		return "", fmt.Errorf("wechat draft/add не вернул media_id")
+	}
+	// Не вызываем freepublish: квота жёсткая, публикация — вручную из черновиков MP.
+	return out.MediaID, nil
+}
+
+func wechatCreds(creds Credentials) (appID, secret string, err error) {
+	appID = strings.TrimSpace(firstCred(creds.ClientID, creds.OwnerID))
+	secret = strings.TrimSpace(firstCred(creds.ClientSecret, creds.Token, creds.APIKey))
+	if appID == "" {
+		return "", "", fmt.Errorf("укажите AppID WeChat (公众号)")
+	}
+	if secret == "" {
+		return "", "", fmt.Errorf("укажите AppSecret WeChat")
+	}
+	return appID, secret, nil
+}
+
+func (WeChat) accessToken(ctx context.Context, appID, secret string) (string, error) {
+	raw := "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=" +
+		url.QueryEscape(appID) + "&secret=" + url.QueryEscape(secret)
+	var out struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		ErrCode     int    `json:"errcode"`
+		ErrMsg      string `json:"errmsg"`
+	}
+	if err := doJSON(ctx, "GET", raw, nil, nil, &out); err != nil {
+		return "", err
+	}
+	if out.ErrCode != 0 {
+		if out.ErrCode == 40125 || out.ErrCode == 40013 || out.ErrCode == 40164 {
+			return "", fmt.Errorf("%w: %s (проверьте AppSecret и IP whitelist в mp.weixin.qq.com)", ErrNeedReauth, out.ErrMsg)
+		}
+		return "", fmt.Errorf("wechat token: %d %s", out.ErrCode, out.ErrMsg)
+	}
+	if out.AccessToken == "" {
+		return "", fmt.Errorf("wechat token: пустой access_token")
+	}
+	return out.AccessToken, nil
+}
+
+func (WeChat) uploadImage(ctx context.Context, accessToken, imageURL string) (string, error) {
+	reqImg, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return "", err
+	}
+	respImg, err := httpClient.Do(reqImg)
+	if err != nil {
+		return "", fmt.Errorf("скачивание фото лота: %w", err)
+	}
+	defer respImg.Body.Close()
+	if respImg.StatusCode >= 400 {
+		return "", fmt.Errorf("фото лота недоступно (%d)", respImg.StatusCode)
+	}
+	imgBytes, err := io.ReadAll(io.LimitReader(respImg.Body, 2<<20))
+	if err != nil {
+		return "", err
+	}
+	if len(imgBytes) < 32 {
+		return "", fmt.Errorf("фото лота слишком маленькое")
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("media", "cover.jpg")
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(imgBytes); err != nil {
+		return "", err
+	}
+	_ = writer.Close()
+
+	raw := "https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=" +
+		url.QueryEscape(accessToken) + "&type=image"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, raw, &body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		MediaID string `json:"media_id"`
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+	}
+	if err := json.Unmarshal(payload, &out); err != nil {
+		return "", fmt.Errorf("разбор ответа WeChat media: %w", err)
+	}
+	if out.ErrCode != 0 {
+		return "", fmt.Errorf("wechat media: %d %s", out.ErrCode, out.ErrMsg)
+	}
+	if out.MediaID == "" {
+		return "", fmt.Errorf("wechat media: пустой media_id")
+	}
+	return out.MediaID, nil
+}
+
+func htmlEscape(s string) string {
+	replacer := strings.NewReplacer(
+		`&`, "&amp;",
+		`<`, "&lt;",
+		`>`, "&gt;",
+		`"`, "&quot;",
+	)
+	return replacer.Replace(s)
+}
+
+func truncateRunes(s string, n int) string {
+	s = strings.TrimSpace(s)
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n])
 }
 
 func firstCred(values ...string) string {

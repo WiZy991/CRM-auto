@@ -12,19 +12,20 @@ const (
 	NetworkRuTube    SocialNetwork = "rutube"
 	NetworkAvito     SocialNetwork = "avito"
 	NetworkDrom      SocialNetwork = "drom"
+	NetworkWeChat    SocialNetwork = "wechat"
 )
 
 // SocialNetworkOrder — порядок карточек в кабинете дилера.
 var SocialNetworkOrder = []SocialNetwork{
 	NetworkTelegram, NetworkVK, NetworkWhatsApp,
 	NetworkInstagram, NetworkYouTube, NetworkRuTube,
-	NetworkAvito, NetworkDrom,
+	NetworkAvito, NetworkDrom, NetworkWeChat,
 }
 
 func (n SocialNetwork) Valid() bool {
 	switch n {
 	case NetworkTelegram, NetworkVK, NetworkWhatsApp, NetworkInstagram,
-		NetworkYouTube, NetworkRuTube, NetworkAvito, NetworkDrom:
+		NetworkYouTube, NetworkRuTube, NetworkAvito, NetworkDrom, NetworkWeChat:
 		return true
 	default:
 		return false
@@ -49,6 +50,8 @@ func (n SocialNetwork) Title() string {
 		return "Авито"
 	case NetworkDrom:
 		return "Дром"
+	case NetworkWeChat:
+		return "WeChat"
 	default:
 		return string(n)
 	}

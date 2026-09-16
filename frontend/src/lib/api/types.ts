@@ -773,7 +773,8 @@ export type SocialNetwork =
   | 'youtube'
   | 'rutube'
   | 'avito'
-  | 'drom';
+  | 'drom'
+  | 'wechat';
 export type SocialAccountStatus = 'disconnected' | 'connected' | 'needs_reauth' | 'error';
 
 export interface SocialChannel {
